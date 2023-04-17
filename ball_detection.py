@@ -36,6 +36,7 @@ balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
 balls = cv.medianBlur(balls, 5)
 
 # Find balls
+# Param1: higher = less circles
 # Param2: higher = less circles
 circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=10, param2=11, minRadius=7, maxRadius=12)
 circles = np.uint16(np.around(circles))
@@ -46,6 +47,8 @@ for i in circles[0, :]:
     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
 
 # cv.imshow("images", np.hstack([table, cropped]))
+# cv.imshow("images", image)
+
 cv.imshow("images", image)
 
 cv.waitKey(0)

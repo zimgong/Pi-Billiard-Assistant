@@ -10,14 +10,23 @@ import cv2 as cv
 
 # image = cv.imread('./blue_table.png')
 image = cv.imread('./IMG_3602_s.JPG')
+# image = cv.imread('./IMG_3600_s.JPG')
 
 # Hard code color range for table and mask out everything else
 # Should work for blue or relevant colored table
+
+# These are perfect for light blue! 
 lower = 100, 100, 0
-upper = 240, 140, 120
+upper = 240, 160, 120
+
+# These are for dark blue! 
+# lower = 80, 80, 0
+# upper = 240, 150, 120
+
 # Mask out everything outside the table
 mask = cv.inRange(image, lower, upper)
 table = cv.bitwise_and(image, image, mask = mask)
+# cv.imshow("images", table)
 
 # Convert to grayscale and find contours
 table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
@@ -29,26 +38,27 @@ hull = cv.convexHull(c)
 new_mask = np.zeros_like(image)
 img_new = cv.drawContours(new_mask, [hull], -1, (255, 255, 255), -1)
 cropped = cv.bitwise_and(image, img_new)
+cv.imshow("images", cropped)
 
 # Mask the table out
 balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
 balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
+# cv.imshow("images", balls)
 balls = cv.medianBlur(balls, 5)
+# cv.imshow("images", balls)
 
 # Find balls
 # Param1: higher = less circles
 # Param2: higher = less circles
-circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=10, param2=11, minRadius=7, maxRadius=12)
+circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=12, param2=12, minRadius=7, maxRadius=12)
 circles = np.uint16(np.around(circles))
-# print(circles)
-# print(circles.shape)
+print(circles)
+print(circles.shape)
 for i in circles[0, :]:
     cv.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
 
-# cv.imshow("images", np.hstack([table, cropped]))
+# cv.imshow("images", np.hstack([cropped, image]))
 # cv.imshow("images", image)
-
-cv.imshow("images", image)
 
 cv.waitKey(0)

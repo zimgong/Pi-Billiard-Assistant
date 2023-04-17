@@ -1,24 +1,64 @@
 import numpy as np
+import argparse
 import cv2 as cv
-import sys
 
-img = cv.imread('coins.jpg')
-assert img is not None, "file could not be read, check with os.path.exists()"
+# ap = argparse.ArgumentParser()
+# ap.add_argument("-i", "--image", help = "Path to the image")
+# args = vars(ap.parse_args())
 
-gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+# image = cv.imread(args["image"])
 
-background = cv.imread('background.jpg')
+# image = cv.imread('./blue_table.png')
+image = cv.imread('./IMG_3602_s.JPG')
+# image = cv.imread('./IMG_3600_s.JPG')
 
-gray_bg = cv.cvtColor(background, cv.COLOR_BGR2GRAY)
+# Hard code color range for table and mask out everything else
+# Should work for blue or relevant colored table
 
-sub_img = gray_img - gray_bg
+# These are perfect for light blue! 
+lower = 100, 100, 0
+upper = 240, 160, 120
 
-sub_img = cv.equalizeHist(sub_img)
-sub_img = cv.medianBlur(sub_img,5)
+# These are for dark blue! 
+# lower = 80, 80, 0
+# upper = 240, 150, 120
 
-ret, thresh = cv.threshold(sub_img, 127, 255, 0)
-contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+# Mask out everything outside the table
+mask = cv.inRange(image, lower, upper)
+table = cv.bitwise_and(image, image, mask = mask)
+# cv.imshow("images", table)
 
-cv.drawContours(sub_img, contours, -1, (0,255,0), 3)
-cv.imshow("Display window", sub_img)
-k = cv.waitKey(0)
+# Convert to grayscale and find contours
+table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
+contours, hierarchy = cv.findContours(table_gray, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+
+# Find the largest contour as the border of the table
+c = max(contours, key = cv.contourArea)
+hull = cv.convexHull(c)
+new_mask = np.zeros_like(image)
+img_new = cv.drawContours(new_mask, [hull], -1, (255, 255, 255), -1)
+cropped = cv.bitwise_and(image, img_new)
+# cv.imshow("images", cropped)
+
+# Mask the table out
+balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
+balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
+# cv.imshow("images", balls)
+balls = cv.medianBlur(balls, 5)
+# cv.imshow("images", balls)
+
+# Find balls
+# Param1: higher = less circles
+# Param2: higher = less circles
+contours, hierarchy = cv.findContours(balls, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+c = max(contours, key = cv.contourArea)
+img_new = cv.drawContours(image, c, -1, (255, 255, 255), 2)
+
+# for i in circles[0, :]:
+#     cv.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
+#     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
+
+# cv.imshow("images", np.hstack([cropped, image]))
+cv.imshow("images", image)
+
+cv.waitKey(0)

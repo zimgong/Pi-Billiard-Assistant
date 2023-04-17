@@ -3,17 +3,21 @@ import argparse
 import cv2 as cv
 
 # cap = cv.VideoCapture('./3076_720p.mp4')
-cap = cv.VideoCapture('./696_720p.mp4')
+# lower = 80, 80, 0
+# upper = 240, 150, 120
 
+cap = cv.VideoCapture('./696_720p.mp4')
 lower = 100, 100, 0
-upper = 240, 140, 120
-first = True
+upper = 240, 160, 120
+
+# Retake table map every 120 frames to avoid effect of hand movement
+count = 0
 
 while cap.isOpened():
     ret, frame = cap.read()
     
-    if first:
-    # Hard code color range for table and mask out everything else
+    if count == 0:
+        # Hard code color range for table and mask out everything else
         mask = cv.inRange(frame, lower, upper)
         table = cv.bitwise_and(frame, frame, mask = mask)
 
@@ -25,7 +29,6 @@ while cap.isOpened():
         hull = cv.convexHull(c)
         new_mask = np.zeros_like(frame)
         img_new = cv.drawContours(new_mask, [hull], -1, (255, 255, 255), -1)
-        first = False
 
     cropped = cv.bitwise_and(frame, img_new)
 
@@ -36,7 +39,7 @@ while cap.isOpened():
 
     # Find balls
     # Param2: higher = less circles
-    circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=10, param2=12, minRadius=7, maxRadius=12)
+    circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=12, param2=12, minRadius=7, maxRadius=12)
     if circles.any():
         circles = np.uint16(np.around(circles))
         # print(circles)
@@ -49,6 +52,10 @@ while cap.isOpened():
     cv.imshow("frame", frame)
     if cv.waitKey(1) & 0xFF == ord('q'):
         break
+
+    count += 1
+    if count >= 120:
+        count = 0
 
 cap.release()
 cv.destroyAllWindows()

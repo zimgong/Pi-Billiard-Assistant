@@ -41,24 +41,45 @@ cropped = cv.bitwise_and(image, img_new)
 # cv.imshow("images", cropped)
 
 # Mask the table out
-balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
-balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
+lower = 90, 90, 190
+upper = 255, 255, 255
+mask = cv.inRange(image, lower, upper)
+table = cv.bitwise_and(cropped, cropped, mask = mask)
+# balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
+# cv.imshow("images", table)
+table = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
+# balls = cv.medianBlur(balls, 5)
 # cv.imshow("images", balls)
-balls = cv.medianBlur(balls, 5)
-# cv.imshow("images", balls)
 
-# Find balls
-# Param1: higher = less circles
-# Param2: higher = less circles
-contours, hierarchy = cv.findContours(balls, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-c = max(contours, key = cv.contourArea)
-img_new = cv.drawContours(image, c, -1, (255, 255, 255), 2)
+# # Find balls
+# # Param1: higher = less circles
+# # Param2: higher = less circles
+# contours, hierarchy = cv.findContours(balls, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+# c = max(contours, key = cv.contourArea)
+# img_new = cv.drawContours(image, c, -1, (255, 255, 255), 2)
 
-# for i in circles[0, :]:
-#     cv.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
-#     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
+# lines = cv.HoughLines(table, 1, np.pi/180, 360, None, 0, 0)
 
-# cv.imshow("images", np.hstack([cropped, image]))
+# if lines is not None:
+#     for i in range(0, len(lines)):
+#         rho = lines[i][0][0]
+#         theta = lines[i][0][1]
+#         a = np.cos(theta)
+#         b = np.sin(theta)
+#         x0 = a*rho
+#         y0 = b*rho
+#         pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+#         pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+#         cv.line(image, pt1, pt2, (0,0,0), 2, cv.LINE_AA)
+
+lines = cv.HoughLinesP(table, 1, np.pi/180, 100, None, 50, 10)
+
+if lines is not None:
+    for i in range(0, len(lines)):
+        l = lines[i][0]
+        cv.line(image, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
+
+# # # cv.imshow("images", np.hstack([cropped, image]))
 cv.imshow("images", image)
 
 cv.waitKey(0)

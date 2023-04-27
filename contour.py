@@ -9,24 +9,24 @@ import cv2 as cv
 # image = cv.imread(args["image"])
 
 # image = cv.imread('./blue_table.png')
-image = cv.imread('./IMG_3602_s.JPG')
+image = cv.imread('./IMG_3674_s.jpg')
 # image = cv.imread('./IMG_3600_s.JPG')
 
 # Hard code color range for table and mask out everything else
 # Should work for blue or relevant colored table
 
 # These are perfect for light blue! 
-lower = 100, 100, 0
-upper = 240, 160, 120
+# lower = 100, 100, 0
+# upper = 240, 160, 120
 
 # These are for dark blue! 
-# lower = 80, 80, 0
-# upper = 240, 150, 120
+lower = 50, 50, 0
+upper = 240, 150, 120
 
 # Mask out everything outside the table
 mask = cv.inRange(image, lower, upper)
 table = cv.bitwise_and(image, image, mask = mask)
-# cv.imshow("images", table)
+cv.imshow("image", table)
 
 # Convert to grayscale and find contours
 table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
@@ -54,9 +54,9 @@ table = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
 # # Find balls
 # # Param1: higher = less circles
 # # Param2: higher = less circles
-# contours, hierarchy = cv.findContours(balls, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-# c = max(contours, key = cv.contourArea)
-# img_new = cv.drawContours(image, c, -1, (255, 255, 255), 2)
+contours, hierarchy = cv.findContours(table, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+c = max(contours, key = cv.contourArea)
+img_new = cv.drawContours(image, c, -1, (255, 255, 255), 2)
 
 # lines = cv.HoughLines(table, 1, np.pi/180, 360, None, 0, 0)
 
@@ -72,12 +72,12 @@ table = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
 #         pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
 #         cv.line(image, pt1, pt2, (0,0,0), 2, cv.LINE_AA)
 
-lines = cv.HoughLinesP(table, 1, np.pi/180, 100, None, 50, 10)
+# lines = cv.HoughLinesP(table, 1, np.pi/180, 100, None, 50, 10)
 
-if lines is not None:
-    for i in range(0, len(lines)):
-        l = lines[i][0]
-        cv.line(image, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
+# if lines is not None:
+#     for i in range(0, len(lines)):
+#         l = lines[i][0]
+#         cv.line(image, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
 
 # # # cv.imshow("images", np.hstack([cropped, image]))
 cv.imshow("images", image)

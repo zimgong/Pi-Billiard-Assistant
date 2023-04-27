@@ -2,31 +2,17 @@ import numpy as np
 import argparse
 import cv2 as cv
 
-# ap = argparse.ArgumentParser()
-# ap.add_argument("-i", "--image", help = "Path to the image")
-# args = vars(ap.parse_args())
-
-# image = cv.imread(args["image"])
-
-# image = cv.imread('./blue_table.png')
-image = cv.imread('./IMG_3602_s.JPG')
+# image = cv.imread('./IMG_3602_s.JPG')
 # image = cv.imread('./IMG_3600_s.JPG')
+image = cv.imread('./IMG_3674_s.jpg')
 
-# Hard code color range for table and mask out everything else
-# Should work for blue or relevant colored table
-
-# These are perfect for light blue! 
-lower = 100, 100, 0
-upper = 240, 160, 120
-
-# These are for dark blue! 
-# lower = 80, 80, 0
-# upper = 240, 150, 120
-
-# Mask out everything outside the table
-mask = cv.inRange(image, lower, upper)
+# Mask out everything outside the table with a hsv color scheme
+hsv_img = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+lower = np.array([110, 50, 50])
+upper = np.array([130, 255, 255])
+mask = cv.inRange(hsv_img, lower, upper)
 table = cv.bitwise_and(image, image, mask = mask)
-# cv.imshow("images", table)
+# cv.imshow("table", table)
 
 # Convert to grayscale and find contours
 table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
@@ -38,19 +24,19 @@ hull = cv.convexHull(c)
 new_mask = np.zeros_like(image)
 img_new = cv.drawContours(new_mask, [hull], -1, (255, 255, 255), -1)
 cropped = cv.bitwise_and(image, img_new)
-cv.imshow("images", cropped)
+# cv.imshow("cropped", cropped)
 
 # Mask the table out
 balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
 balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
-# cv.imshow("images", balls)
+# cv.imshow("balls", balls)
 balls = cv.medianBlur(balls, 5)
-# cv.imshow("images", balls)
+# cv.imshow("balls", balls)
 
 # Find balls
 # Param1: higher = less circles
 # Param2: higher = less circles
-circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=12, param2=12, minRadius=7, maxRadius=12)
+circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=10, maxRadius=14)
 circles = np.uint16(np.around(circles))
 print(circles)
 print(circles.shape)
@@ -59,6 +45,6 @@ for i in circles[0, :]:
     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
 
 # cv.imshow("images", np.hstack([cropped, image]))
-# cv.imshow("images", image)
+cv.imshow("images", image)
 
 cv.waitKey(0)

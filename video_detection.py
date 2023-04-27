@@ -6,9 +6,10 @@ import cv2 as cv
 # lower = 80, 80, 0
 # upper = 240, 150, 120
 
-cap = cv.VideoCapture('./696_720p.mp4')
-lower = 100, 100, 0
-upper = 240, 160, 120
+# cap = cv.VideoCapture('./696_720p.mp4')
+# cap = cv.VideoCapture('./716_720p.mp4')
+cap = cv.VideoCapture('./717_720p.mp4')
+
 
 # Retake table map every 120 frames to avoid effect of hand movement
 count = 0
@@ -18,7 +19,10 @@ while cap.isOpened():
     
     if count == 0:
         # Hard code color range for table and mask out everything else
-        mask = cv.inRange(frame, lower, upper)
+        hsv_img = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+        lower = np.array([90, 50, 50])
+        upper = np.array([120, 255, 255])
+        mask = cv.inRange(hsv_img, lower, upper)
         table = cv.bitwise_and(frame, frame, mask = mask)
 
         table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
@@ -32,14 +36,17 @@ while cap.isOpened():
 
     cropped = cv.bitwise_and(frame, img_new)
 
-    # Mask the table out
-    balls = cv.bitwise_and(cropped, cropped, mask = 255-mask)
-    balls = cv.cvtColor(balls, cv.COLOR_BGR2GRAY)
-    balls = cv.medianBlur(balls, 5)
+    sensitivity = 70
+    hsv_img = cv.cvtColor(cropped, cv.COLOR_BGR2HSV)
+    lower = np.array([0, 0, 255 - sensitivity])
+    upper = np.array([255, sensitivity, 255])
+    mask = cv.inRange(hsv_img, lower, upper)
+    new_img = cv.bitwise_and(cropped, cropped, mask = mask)
 
     # Find balls
     # Param2: higher = less circles
-    circles = cv.HoughCircles(balls, cv.HOUGH_GRADIENT, 1, 20, param1=12, param2=12, minRadius=7, maxRadius=12)
+    gray_img = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
+    circles = cv.HoughCircles(gray_img, cv.HOUGH_GRADIENT, 1, 20, param1=10, param2=10, minRadius=7, maxRadius=13)
     if circles.any():
         circles = np.uint16(np.around(circles))
         # print(circles)
@@ -54,7 +61,7 @@ while cap.isOpened():
         break
 
     count += 1
-    if count >= 120:
+    if count >= 30:
         count = 0
 
 cap.release()

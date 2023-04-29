@@ -1,5 +1,4 @@
 import numpy as np
-import argparse
 import cv2 as cv
 
 # image = cv.imread('./IMG_3602_s.JPG')
@@ -28,10 +27,14 @@ contours, hierarchy = cv.findContours(table_gray, cv.RETR_TREE, cv.CHAIN_APPROX_
 # Find the largest contour as the border of the table
 c = max(contours, key = cv.contourArea)
 hull = cv.convexHull(c)
+# hull = cv.minAreaRect(c)
 new_mask = np.zeros_like(image)
 img_new = cv.drawContours(new_mask, [hull], -1, (255, 255, 255), -1)
+# box = cv.boxPoints(hull)
+# box = np.int0(box)
+# img_new = cv.drawContours(new_mask, [box], 0, (255, 255, 255), -1)
 cropped = cv.bitwise_and(image, img_new)
-# cv.imshow("cropped table", cropped)
+cv.imshow("hull", cropped)
 
 hsv_img = cv.cvtColor(cropped, cv.COLOR_BGR2HSV)
 lower = np.array([150, 120, 120])
@@ -42,7 +45,7 @@ new_img = cv.bitwise_and(cropped, cropped, mask = mask)
 
 table = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
 lines = cv.HoughLinesP(table, 1, np.pi/180, 50, None, 50, 10)
-print(lines)
+# print(lines)
 
 if lines is not None:
     for i in range(0, len(lines)):
@@ -64,7 +67,7 @@ new_img = cv.bitwise_and(cropped, cropped, mask = mask)
 gray_img = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
 circles = cv.HoughCircles(gray_img, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=9, maxRadius=12)
 circles = np.uint16(np.around(circles))
-print(circles)
+# print(circles)
 for i in circles[0, :]:
     cv.circle(image, (i[0], i[1]), i[2], (0, 255, 0), 2)
     cv.circle(image, (i[0], i[1]), 2, (0, 0, 255), 3)
@@ -74,10 +77,8 @@ cue = 0
 for i in lines:
     cue += i
 cue = cue / len(lines)
-print(cue)
-print(cue[0][2], cue[0][3])
-# print(circles[0][0][0], circles[0][0][1])
+
 cv.line(image, (lines[1][0][0], lines[1][0][1]), (circles[0][0][0], circles[0][0][1]), (0,0,0), 2, cv.LINE_AA)
-cv.imshow("images", image)
+
 
 cv.waitKey(0)

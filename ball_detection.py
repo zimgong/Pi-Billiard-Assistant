@@ -1,14 +1,14 @@
 import numpy as np
-import argparse
 import cv2 as cv
 
+# Load image
 # image = cv.imread('./IMG_3602_s.JPG')
 # image = cv.imread('./IMG_3600_s.JPG')
 image = cv.imread('./IMG_3674_s.jpg')
 
 # Mask out everything outside the table with a hsv color scheme
 hsv_img = cv.cvtColor(image, cv.COLOR_BGR2HSV)
-lower = np.array([110, 50, 50])
+lower = np.array([110, 50, 50]) # Color code for dark blue
 upper = np.array([130, 255, 255])
 mask = cv.inRange(hsv_img, lower, upper)
 table = cv.bitwise_and(image, image, mask = mask)

@@ -4,6 +4,7 @@
 
 import numpy as np
 import cv2 as cv
+import time
 
 # Detect the cue stick and cue ball from a image of the pool table
 def detect_cue(image):
@@ -93,12 +94,16 @@ def detect_cue(image):
                     d0 = d1
                     min = i
             print("Cue ball coordinates:", min)
-            cv.circle(image, min[0:2], min[2], (0, 255, 0), 2)
-            cv.circle(image, min[0:2], 2, (0, 0, 255), 3)
-            cv.line(image, cue[2:4], min[0:2], (255,255,0), 2, cv.LINE_AA)
+            cv.circle(image, (min[0], min[1]), min[2], (0, 255, 0), 2)
+            cv.circle(image, (min[0], min[1]), 2, (0, 0, 255), 3)
+            cv.circle(image, (min[0], min[1]), 2, (0, 0, 255), 3)
+            cv.line(image, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
             # cv.imshow("images", image)
     # cv.waitKey(0)
     return cue, min, hull[:, 0, :]
 
-# image = cv.imread('./IMG_3686_s.jpg')
+# start_time = time.time()
+# image = cv.imread('./IMG_3674_s.jpg')
 # detect_cue(image)
+# elapsed_time = time.time() - start_time
+# print("elapsed time: ", elapsed_time)

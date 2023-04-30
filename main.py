@@ -30,24 +30,24 @@ image = cv.imread('./IMG_3674_s.jpg')
 #                   [1108, 135], [1114, 145], [1215, 608]
 #                   ])
 
-try:
-    cue_stick, cue_ball, table = cd.detect_cue(image)
+# try:
+cue_stick, cue_ball, table = cd.detect_cue(image)
 
     # Draw out the table, cue stick and cue ball
-    cv.drawContours(image, [table], -1, (255,255,255), 2)
-    for i in table:
-        cv.circle(image, (i[0], i[1]), 2, (255,255,255), 2, cv.LINE_AA)
-    cv.line(image, cue_stick[0:2], cue_stick[2:4], (0,0,0), 2, cv.LINE_AA)
-    cv.circle(image, (cue_ball[0], cue_ball[1]), cue_ball[2], (255,0,255), 2, cv.LINE_AA)
+cv.drawContours(image, [table], -1, (255,255,255), 2)
+for i in table:
+    cv.circle(image, (i[0], i[1]), 2, (255,255,255), 2, cv.LINE_AA)
+cv.line(image, (cue_stick[0], cue_stick[1]), (cue_stick[2], cue_stick[3]), (0,0,0), 2, cv.LINE_AA)
+cv.circle(image, (cue_ball[0], cue_ball[1]), cue_ball[2], (255,0,255), 2, cv.LINE_AA)
 
-    hull = ConvexHull(table) # Turn the table coordinates into a convex hull
-    stick_euclid = np.linalg.norm(cue_stick[2:4]-cue_stick[0:2])/10
-    obj_stick = bc.Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 4)
-    obj_ball = bc.Object(cue_ball[0:2], 0, [0,0], cue_ball[2])
-    bc.simulate_stick(obj_stick, obj_ball, 100, image, hull)
+hull = ConvexHull(table) # Turn the table coordinates into a convex hull
+stick_euclid = np.linalg.norm(cue_stick[2:4]-cue_stick[0:2])/10
+obj_stick = bc.Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 4)
+obj_ball = bc.Object(cue_ball[0:1], 0, [0,0], cue_ball[2])
+bc.simulate_stick(obj_stick, obj_ball, 100, image, hull)
 
-    cv.imshow("image", image)
-    cv.waitKey(0)
+cv.imshow("image", image)
+cv.waitKey(0)
 
-except:
-    print("No cue stick or cue ball detected! ")
+# except:
+#     print("No cue stick or cue ball detected! ")

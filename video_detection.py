@@ -14,20 +14,21 @@ cap = cv.VideoCapture('./769_480p.mp4')
 count = 0
 
 def find_table(frame_hsv):
-	# hsv color range for blue pool table
-	lower_blue = np.array([110,50,50])
-	upper_blue = np.array([130,255,255])
-	# Mask out everything but the pool table (blue)
-	mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
-	# Find the pool table contour
-	contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-	# Find the largest contour as the border of the table
-	try:
-		table = max(contours, key = cv.contourArea)
-	except:
-		print("No table found!")
-		return None
-	return cv.convexHull(table)
+    # hsv color range for blue pool table
+    lower_blue = np.array([110,50,50])
+    upper_blue = np.array([130,255,255])
+    # Mask out everything but the pool table (blue)
+    mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
+    cv.imshow("cropped table", mask)
+    # Find the pool table contour
+    contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    # Find the largest contour as the border of the table
+    try:
+        table = max(contours, key = cv.contourArea)
+    except:
+        print("No table found!")
+        return None
+    return cv.convexHull(table)
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -87,7 +88,7 @@ while cap.isOpened():
             cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
             cv.line(frame, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
 
-    cv.imshow("frame", frame)
+    # cv.imshow("frame", frame)
     if cv.waitKey(1) == ord('q'):
             cap.release()
             cv.destroyAllWindows()

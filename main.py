@@ -44,11 +44,15 @@ hull = ConvexHull(table) # Turn the table coordinates into a convex hull
 stick_euclid = np.linalg.norm(cue_stick[2:4]-cue_stick[0:2])/15
 obj_stick = bc.Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 5)
 obj_ball = bc.Object(cue_ball[0:2], 0, [0,0], cue_ball[2])
-bc.simulate_stick(obj_stick, obj_ball, 100, image, hull)
+lines = bc.simulate_stick(obj_stick, obj_ball, 100, image, hull)
+print(lines)
+new_mask = np.zeros_like(image)
+for i in lines:
+    cv.line(new_mask, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0,255,0), 2, cv.LINE_AA)
 
 # cv.namedWindow("image", cv.WND_PROP_FULLSCREEN)
 # cv.setWindowProperty("image",cv.WND_PROP_FULLSCREEN,cv.WINDOW_FULLSCREEN)
-cv.imshow("image", image)
+cv.imshow("image", new_mask)
 cv.waitKey(0)
 
 # except:

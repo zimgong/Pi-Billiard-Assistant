@@ -23,8 +23,6 @@ def detect_cue(image):
 
     # Convert to grayscale and find contours
     contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-
-    print(contours)
     # Find the largest contour as the border of the table
     c = max(contours, key = cv.contourArea)
     hull = cv.convexHull(c)
@@ -58,7 +56,7 @@ def detect_cue(image):
             cv.line(image, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
         cue = cue / len(lines)
         cue = np.round(cue).astype(int)
-    cv.imshow("images", image)
+    # cv.imshow("images", image)
 
     # Detect cue ball by masking white
     sensitivity = 80
@@ -96,12 +94,12 @@ def detect_cue(image):
             cv.circle(image, (min[0], min[1]), min[2], (0, 255, 0), 2)
             cv.circle(image, (min[0], min[1]), 2, (0, 0, 255), 3)
             cv.line(image, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
-            cv.imshow("images", image)
-    cv.waitKey(0)
-    # return cue, min, hull[:, 0, :]
+            # cv.imshow("images", image)
+    # cv.waitKey(0)
+    return cue, min, hull[:, 0, :]
 
-start_time = time.time()
-image = cv.imread('./IMG_3674_s.jpg')
-detect_cue(image)
-elapsed_time = time.time() - start_time
-print("elapsed time: ", elapsed_time)
+# start_time = time.time()
+# image = cv.imread('./IMG_3674_s.jpg')
+# detect_cue(image)
+# elapsed_time = time.time() - start_time
+# print("elapsed time: ", elapsed_time)

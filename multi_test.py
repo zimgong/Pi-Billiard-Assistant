@@ -65,7 +65,7 @@ def simulate_stick(object1, object2, num_iter, frame, hull):
     iter = 0
     collided = False
     ini_pos = copy.deepcopy(object1.pos)
-    lines = np.array([[]])
+    lines = []
     while iter <= num_iter:
         res = object1.move(hull)
         if res == False:
@@ -73,11 +73,11 @@ def simulate_stick(object1, object2, num_iter, frame, hull):
         collided = collide(object1, object2)
         if collided:
             change_v(object1, object2)
-            lines = np.append(lines, [[ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]]], axis=0)
+            lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
             lines = simulate_ball(object2, num_iter, frame, hull, lines, True)
             return lines
     if collided == False:
-        lines = np.append(lines, [[ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]]], axis=0)
+        lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
     return lines
 
 # Simulate the cue ball behavior, move the cue ball
@@ -90,7 +90,7 @@ def simulate_ball(object, num_iter, frame, hull, lines, flag):
             if flag == True:
                 simulate_ball(object, num_iter, frame, hull, False)
             break
-    lines = np.append(lines, [[ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]]], axis=0)
+    lines.append([ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]])
     return lines
 
 def find_table(frame_hsv):
@@ -113,6 +113,7 @@ def find_table(frame_hsv):
 def grab_frame_display(run_flag, frame_queue, line_queue):
 	global table
 	start_datetime = datetime.now()
+	last_receive_time = 0
 	initial = True
 	while run_flag.value:
 		# Capture frame-by-frame
@@ -127,20 +128,24 @@ def grab_frame_display(run_flag, frame_queue, line_queue):
 		if initial:
 			table = find_table(frame_hsv)
 			initial = False
+			new_mask = np.zeros_like(frame)
 		# Check if time since last send to queue exceeds 30ms
 		curr_datetime = datetime.now()
 		delta_time = curr_datetime-start_datetime
 		delta_time_ms = delta_time.total_seconds()*1000
-		if delta_time_ms > 30 and frame_queue.qsize() < 4:
+		if delta_time_ms > 30 and frame_queue.qsize() < 3:
 			start_datetime = curr_datetime
 			frame_queue.put(frame_hsv)
 			print('P0 Put frame, queue size: ', frame_queue.qsize())
 		if not line_queue.empty():
+			last_receive_time = time.time()
 			lines = line_queue.get()
 			print('P0 Get line, queue size: ', line_queue.qsize())
+		if time.time() - last_receive_time < 0.5:
+			print(lines)
 			for i in lines:
-				cv.line(frame, (i[0], i[1]), (i[2], i[3]), (0, 255, 0), 2)
-		cv.imshow('frame',frame)
+				cv.line(new_mask, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 0), 2)
+		cv.imshow('frame', new_mask)
 		if cv.waitKey(1) == ord('q'):
 			cap.release()
 			cv.destroyAllWindows()
@@ -158,6 +163,7 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 			start_turn.value = 2
 			# Get frame from queue
 			frame_hsv = frame_queue.get()
+			print('P1 Get frame, queue size: ', frame_queue.qsize())
 			# hsv color range for pink cue stick
 			lower_pink = np.array([150, 120, 120])
 			upper_pink = np.array([165, 255, 255])
@@ -174,6 +180,7 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 				cue = cue / len(lines)
 				cue = np.round(cue).astype(int)
 			stick_queue.put(cue) # Put stick coordinates to queue
+			print('P1 Put stick, queue size: ', stick_queue.qsize())
 		else:
 			time.sleep(0.03)
 	print("Quiting P1")
@@ -186,6 +193,7 @@ def process_ball(run_flag, frame_queue, stick_queue, ball_queue, start_turn):
 			start_turn.value = 3
 			# Get frame from queue
 			frame_hsv = frame_queue.get()
+			print('P2 Get frame, queue size: ', frame_queue.qsize())
 			sensitivity = 80
 			# hsv color range for white ball
 			lower_white = np.array([0, 0, 255 - sensitivity])
@@ -220,12 +228,12 @@ def process_ball(run_flag, frame_queue, stick_queue, ball_queue, start_turn):
 					# cv.circle(frame, (min[0], min[1]), min[2], (0, 255, 0), 2)
 					# cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
 			ball_queue.put(min) # Put stick back
+			print('P2 Put ball, queue size: ', ball_queue.qsize())
 		else:
 			time.sleep(0.03)
 	print("Quiting P2")
 	print('P2 frame queue empty: ', frame_queue.empty())
 	print('P2 stick queue empty: ', stick_queue.empty())
-
 
 # Process 3 computes Physics
 def process_physics(run_flag, ball_queue, line_queue, start_turn):
@@ -234,6 +242,7 @@ def process_physics(run_flag, ball_queue, line_queue, start_turn):
 		if not ball_queue.empty() and start_turn.value == 3:
 			start_turn.value = 1
 			x = ball_queue.get()
+			print('P3 Get ball, queue size: ', ball_queue.qsize())
 			cue_stick = np.array([135, 670, 185, 661])
 			cue_ball = np.array([240, 660, 11])
 			table = np.array([[1215, 620],[1179, 680], [1163, 682],
@@ -253,7 +262,9 @@ def process_physics(run_flag, ball_queue, line_queue, start_turn):
 			obj_stick = Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 4)
 			obj_ball = Object(cue_ball[0:1], 0, [0,0], cue_ball[2])
 			res = simulate_stick(obj_stick, obj_ball, 100, frame, hull)
+			res = [[10, 20, 30, 100], [20, 300, 167, 293]]
 			line_queue.put(res)
+			print('P3 Put line, queue size: ', line_queue.qsize())
 		else:
 			#print("Processor 3 Didn't Receive Frame, sleep for 30ms")
 			time.sleep(0.03)

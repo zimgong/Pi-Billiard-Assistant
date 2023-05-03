@@ -19,13 +19,12 @@ def detect_cue(image):
     # upper = np.array([120, 255, 255])
 
     mask = cv.inRange(hsv_img, lower, upper)
-    table = cv.bitwise_and(image, image, mask = mask)
-    # cv.imshow("cropped table", table)
+    # cv.imshow("cropped table", mask)
 
     # Convert to grayscale and find contours
-    table_gray = cv.cvtColor(table, cv.COLOR_BGR2GRAY)
-    contours, hierarchy = cv.findContours(table_gray, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
 
+    print(contours)
     # Find the largest contour as the border of the table
     c = max(contours, key = cv.contourArea)
     hull = cv.convexHull(c)
@@ -43,13 +42,13 @@ def detect_cue(image):
     lower = np.array([150, 120, 120])
     upper = np.array([165, 255, 255])
     mask = cv.inRange(hsv_img, lower, upper)
-    new_img = cv.bitwise_and(image, image, mask = mask)
+    # new_img = cv.bitwise_and(image, image, mask = mask)
     # cv.imshow("test", new_img)
 
-    table = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
-    ret, thresh = cv.threshold(table, 100, 255, cv.THRESH_BINARY)
-    cv.imshow("table", thresh)
-    lines = cv.HoughLinesP(thresh, 1, np.pi/180, 40, None, 20, 0)
+    # table = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
+    # ret, thresh = cv.threshold(mask, 100, 255, cv.THRESH_BINARY)
+    # # cv.imshow("table", thresh)
+    lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, None, 20, 0)
     print("Line coordinates:", lines)
     cue = 0
     if lines is not None:
@@ -59,7 +58,7 @@ def detect_cue(image):
             cv.line(image, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
         cue = cue / len(lines)
         cue = np.round(cue).astype(int)
-    # cv.imshow("images", image)
+    cv.imshow("images", image)
 
     # Detect cue ball by masking white
     sensitivity = 80
@@ -74,7 +73,7 @@ def detect_cue(image):
     # Param1: higher = less circles
     # Param2: higher = less circles
     gray_img = cv.cvtColor(new_img, cv.COLOR_BGR2GRAY)
-    circles = cv.HoughCircles(gray_img, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=9, maxRadius=15)
+    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=10, maxRadius=15)
     print("Ball coordinates:", circles)
     if lines is not None:
         center = np.array([640, 480])
@@ -96,14 +95,13 @@ def detect_cue(image):
             print("Cue ball coordinates:", min)
             cv.circle(image, (min[0], min[1]), min[2], (0, 255, 0), 2)
             cv.circle(image, (min[0], min[1]), 2, (0, 0, 255), 3)
-            cv.circle(image, (min[0], min[1]), 2, (0, 0, 255), 3)
             cv.line(image, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
-            # cv.imshow("images", image)
-    # cv.waitKey(0)
-    return cue, min, hull[:, 0, :]
+            cv.imshow("images", image)
+    cv.waitKey(0)
+    # return cue, min, hull[:, 0, :]
 
-# start_time = time.time()
-# image = cv.imread('./IMG_3674_s.jpg')
-# detect_cue(image)
-# elapsed_time = time.time() - start_time
-# print("elapsed time: ", elapsed_time)
+start_time = time.time()
+image = cv.imread('./IMG_3674_s.jpg')
+detect_cue(image)
+elapsed_time = time.time() - start_time
+print("elapsed time: ", elapsed_time)

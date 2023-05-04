@@ -70,6 +70,7 @@ def simulate_stick(object1, object2, num_iter, image, hull):
     iter = 0
     collided = False
     ini_pos = copy.deepcopy(object1.pos)
+    lines = []
     while iter <= num_iter:
         res = object1.move(hull)
         if res == False:
@@ -77,26 +78,28 @@ def simulate_stick(object1, object2, num_iter, image, hull):
         collided = collide(object1, object2)
         if collided:
             change_v(object1, object2)
-            cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
-            simulate_ball(object2, num_iter, image, hull, True)
-            return
+            lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+            # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
+            lines = simulate_ball(object2, num_iter, image, hull, lines, True)
+            return lines
     if collided == False:
-        cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
-    # print(ini_pos)
-    # print(object.pos)
-    return
+        lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+        # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
+    return lines
 
 # Simulate the cue ball behavior, move the cue ball
-def simulate_ball(object, num_iter, image, hull, flag):
+def simulate_ball(object, num_iter, image, hull, lines, flag):
     iter = 0
     ini_pos = copy.deepcopy(object.pos)
     while iter <= num_iter:
         res = object.move(hull)
         if res == False:
             if flag == True:
-                simulate_ball(object, num_iter, image, hull, False)
+                simulate_ball(object, num_iter, image, hull, lines, False)
             break
-    cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
+    lines.append([ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]])
+    # cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
+    return lines
 
 cue_stick = np.array([135, 670, 185, 661])
 table = np.array([[1215, 620],[1179, 680], [1163, 682],

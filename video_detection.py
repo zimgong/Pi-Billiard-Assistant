@@ -1,6 +1,8 @@
-import numpy as np
-import argparse
 import cv2 as cv
+import numpy as np
+import copy
+from scipy.spatial import ConvexHull
+import time
 
 # cap = cv.VideoCapture('./3076_720p.mp4')
 # lower = 80, 80, 0
@@ -13,13 +15,107 @@ cap = cv.VideoCapture('./769_480p.mp4')
 # Retake table map every 120 frames to avoid effect of hand movement
 count = 0
 
+# Define a class for balls and the move function
+class Object:
+    def __init__(self, pos, speed, direct, radius):
+        self.pos = pos # Ball position
+        self.speed = speed # Ball speed, not used yet
+        self.direct = direct # Ball direction vector
+        self.radius = radius # Ball radius
+
+    def move(self, hull): # Move the ball based on its direction vector
+        self.pos[0] += self.direct[0]
+        self.pos[1] += self.direct[1]
+        # If the ball is out of the table, change its direction, not yet implemented
+        res = point_in_hull(self.pos, hull)
+        if res is not None:
+            self.direct = collide_hull(self.direct[0:2], res)
+            return False
+        return True
+
+# # Check if a point is inside the convex hull
+# def point_in_hull(point, hull, tolerance=1e-12):
+#         return all(
+#             (np.dot(eq[:-1], point) + eq[-1] <= tolerance)
+#             for eq in hull.equations)
+
+# Check if a point is inside the convex hull
+def point_in_hull(point, hull, tolerance=1e-12):
+        res = 0
+        for eq in hull.equations:
+            res = np.dot(eq[:-1], point) + eq[-1]
+            if res >= tolerance:
+                return eq[0:2]
+        return None
+
+def collide_hull(direct, eq):
+    res = direct-2*np.dot(direct, eq)*eq 
+    return  res  
+
+# A helper function for collide detection between two objects
+def collide(object1, object2):
+    dist = np.linalg.norm(object1.pos-object2.pos)
+    if dist <= (object1.radius + object2.radius) + 1:
+        return True
+    return False
+
+# Change the speed of two objects based on real-world physics
+def change_v(object1, object2):
+    m1, m2 = object1.radius**2, object2.radius**2
+    M = m1 + m2
+    r1, r2 = object1.pos, object2.pos
+    d = np.linalg.norm(r1-r2)**2
+    v1 = object1.direct
+    v2 = object2.direct
+    # u1 = (v1 - 2*m2/M*np.dot(v1-v2,r1-r2)/d*(r1-r2))
+    u2 = (v2 - 2*m1/M*np.dot(v2-v1,r2-r1)/d*(r2-r1))
+    # object1.speed = [round(u1[0]), round(u1[1])]
+    # We only care about the speed of the second object
+    object2.direct = [u2[0], u2[1]]
+
+# Simulate the cue stick behavior, hits the cue ball and let the cue ball move
+def simulate_stick(object1, object2, num_iter, image, hull):
+    iter = 0
+    collided = False
+    ini_pos = copy.deepcopy(object1.pos)
+    lines = []
+    while iter <= num_iter:
+        res = object1.move(hull)
+        if res == False:
+            break
+        collided = collide(object1, object2)
+        if collided:
+            change_v(object1, object2)
+            lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+            # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
+            lines = simulate_ball(object2, num_iter, image, hull, lines, True)
+            return lines
+    if collided == False:
+        lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+        # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
+    return lines
+
+# Simulate the cue ball behavior, move the cue ball
+def simulate_ball(object, num_iter, image, hull, lines, flag):
+    iter = 0
+    ini_pos = copy.deepcopy(object.pos)
+    while iter <= num_iter:
+        res = object.move(hull)
+        if res == False:
+            if flag == True:
+                simulate_ball(object, num_iter, image, hull, lines, False)
+            break
+    lines.append([ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]])
+    # cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
+    return lines
+
 def find_table(frame_hsv):
     # hsv color range for blue pool table
-    lower_blue = np.array([110,50,50])
+    lower_blue = np.array([100,50,50])
     upper_blue = np.array([130,255,255])
     # Mask out everything but the pool table (blue)
     mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
-    cv.imshow("cropped table", mask)
+    # cv.imshow("cropped table", mask)
     # Find the pool table contour
     contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
     # Find the largest contour as the border of the table
@@ -32,7 +128,12 @@ def find_table(frame_hsv):
 
 while cap.isOpened():
     ret, frame = cap.read()
-    
+    time.sleep(0.05)
+    if not ret:
+        print("Can't receive frame (stream end?). Exiting ...")
+        cap.release()
+        cv.destroyAllWindows()
+        break
     frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 
     if count == 0:
@@ -41,10 +142,12 @@ while cap.isOpened():
     new_mask = np.zeros_like(frame)
     img_new = cv.drawContours(new_mask, [table], -1, (255, 255, 255), -1)
     cropped = cv.bitwise_and(frame, img_new)
+    cv.imshow("cropped", cropped)
 
-    lower = np.array([150, 120, 120])
+    lower = np.array([150, 40, 40])
     upper = np.array([165, 255, 255])
     mask = cv.inRange(frame_hsv, lower, upper)
+    # cv.imshow("mask", mask)
 
     lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, None, 20, 0)
     print("Line coordinates:", lines)
@@ -64,16 +167,16 @@ while cap.isOpened():
     mask = cv.inRange(hsv_img, lower, upper)
     new_img = cv.bitwise_and(cropped, cropped, mask = mask)
 
-    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=10, maxRadius=15)
+    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=5, maxRadius=10)
     print("Ball coordinates:", circles)
     if lines is not None:
-        center = np.array([640, 480])
+        center = np.array([320, 240])
         d0 = np.linalg.norm(cue[0:2] - center)
         d1 = np.linalg.norm(cue[2:4] - center)
         if d0 < d1:
             cue[0], cue[2] = cue[2], cue[0]
             cue[1], cue[3] = cue[3], cue[1]
-        print("Cue stick coordinates:", cue)
+        # print("Cue stick coordinates:", cue)
         if circles is not None:
             circles = np.uint16(np.around(circles))
             d0 = 1000
@@ -83,12 +186,25 @@ while cap.isOpened():
                 if d1 < d0:
                     d0 = d1
                     min = i
-            print("Cue ball coordinates:", min)
+            # print("Cue ball coordinates:", min)
             cv.circle(frame, (min[0], min[1]), min[2], (0, 255, 0), 2)
             cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
             cv.line(frame, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
 
-    # cv.imshow("frame", frame)
+    hull = ConvexHull(table[:,0,:]) # Turn the table coordinates into a convex hull
+    if cue is not 0:
+        print('Found cue!', cue)
+        print('Found balls!', min)
+        stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/15
+        obj_stick = Object(cue[2:4], 3, (cue[2:4]-cue[0:2])/stick_euclid, 5)
+        obj_ball = Object(min[0:2], 0, [0,0], min[2])
+        lines = simulate_stick(obj_stick, obj_ball, 100, frame, hull)
+        print(lines)
+        new_mask = np.zeros_like(frame)
+        for i in lines:
+            cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0,255,0), 2, cv.LINE_AA)
+
+    cv.imshow("frame", frame)
     if cv.waitKey(1) == ord('q'):
             cap.release()
             cv.destroyAllWindows()

@@ -95,7 +95,7 @@ def simulate_ball(object, num_iter, frame, hull, lines, flag):
 
 def find_table(frame_hsv):
 	# hsv color range for blue pool table
-	lower_blue = np.array([110,50,50])
+	lower_blue = np.array([100,50,50])
 	upper_blue = np.array([130,255,255])
 	# Mask out everything but the pool table (blue)
 	mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
@@ -107,7 +107,7 @@ def find_table(frame_hsv):
 	except:
 		print("No table found!")
 		return None
-	return cv.convexHull(table)[:, 0, :]
+	return cv.convexHull(table)
 
 # Function for the Master Process
 def grab_frame_display(run_flag, frame_queue, line_queue):
@@ -115,12 +115,21 @@ def grab_frame_display(run_flag, frame_queue, line_queue):
 	start_datetime = datetime.now()
 	last_receive_time = 0
 	initial = True
+	cap = cv.VideoCapture('./769_480p.mp4')
+	cap.set(cv.CAP_PROP_FPS, 20)
+	if not cap.isOpened():
+		print("Cannot open camera")
+		exit()
 	while run_flag.value:
 		# Capture frame-by-frame
 		ret, frame = cap.read()
 		# if frame is read correctly ret is True
 		if not ret:
 			print("Can't receive frame (stream end?). Exiting ...")
+			cap.release()
+			cv.destroyAllWindows()
+			run_flag.value = 0
+			print("Set run_flag 0")
 			break
 		# Convert to hsv color space
 		frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
@@ -128,12 +137,12 @@ def grab_frame_display(run_flag, frame_queue, line_queue):
 		if initial:
 			table = find_table(frame_hsv)
 			initial = False
-			new_mask = np.zeros_like(frame)
+			# new_mask = np.zeros_like(frame)
 		# Check if time since last send to queue exceeds 30ms
 		curr_datetime = datetime.now()
 		delta_time = curr_datetime-start_datetime
 		delta_time_ms = delta_time.total_seconds()*1000
-		if delta_time_ms > 30 and frame_queue.qsize() < 3:
+		if delta_time_ms > 10 and frame_queue.qsize() < 3:
 			start_datetime = curr_datetime
 			frame_queue.put(frame_hsv)
 			print('P0 Put frame, queue size: ', frame_queue.qsize())
@@ -142,10 +151,10 @@ def grab_frame_display(run_flag, frame_queue, line_queue):
 			lines = line_queue.get()
 			print('P0 Get line, queue size: ', line_queue.qsize())
 		if time.time() - last_receive_time < 0.5:
-			print(lines)
+			print('P0 Draw lines')
 			for i in lines:
-				cv.line(new_mask, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 0), 2)
-		cv.imshow('frame', new_mask)
+				cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 0), 2)
+		cv.imshow('frame', frame)
 		if cv.waitKey(1) == ord('q'):
 			cap.release()
 			cv.destroyAllWindows()
@@ -165,13 +174,13 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 			frame_hsv = frame_queue.get()
 			print('P1 Get frame, queue size: ', frame_queue.qsize())
 			# hsv color range for pink cue stick
-			lower_pink = np.array([150, 120, 120])
+			lower_pink = np.array([150, 40, 40])
 			upper_pink = np.array([165, 255, 255])
 			# Mask out everything but the cue stick (pink)
 			mask = cv.inRange(frame_hsv, lower_pink, upper_pink)
 			# Find the cue stick
 			lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, minLineLength=20, maxLineGap=0)
-			print("Line coordinates:", lines)
+			# print("Line coordinates:", lines)
 			cue = 0
 			if lines is not None:
 				for i in range(0, len(lines)):
@@ -179,6 +188,7 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 					cue += l
 				cue = cue / len(lines)
 				cue = np.round(cue).astype(int)
+			print('	Cue coordinates: ', cue)
 			stick_queue.put(cue) # Put stick coordinates to queue
 			print('P1 Put stick, queue size: ', stick_queue.qsize())
 		else:
@@ -200,34 +210,32 @@ def process_ball(run_flag, frame_queue, stick_queue, ball_queue, start_turn):
 			upper_white = np.array([255, sensitivity, 255])
 			# Mask out everything but the cue stick (pink)
 			mask = cv.inRange(frame_hsv, lower_white, upper_white)
-			circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=10, maxRadius=15)
-			print("Ball coordinates:", circles)
+			circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=5, maxRadius=10)
+			# print("Ball coordinates:", circles)
 			cue = stick_queue.get() # Get stick coordinates from queue
-			cue = np.array([135, 670, 185, 661])
-			if cue is not None:
+			print('Get cue', cue)
+			if cue is not 0:
 				center = np.array([320, 240])
 				d0 = np.linalg.norm(cue[0:2] - center)
 				d1 = np.linalg.norm(cue[2:4] - center)
-				d0 = 10
-				d1 = 20
-				# if d0 < d1:
-				# 	cue[0], cue[2] = cue[2], cue[0]
-				# 	cue[1], cue[3] = cue[3], cue[1]
-				print("Cue stick coordinates:", cue)
-				min = 0
+				if d0 < d1:
+					cue[0], cue[2] = cue[2], cue[0]
+					cue[1], cue[3] = cue[3], cue[1]
+				# print("Cue stick coordinates:", cue)
 				if circles is not None:
 					circles = np.uint16(np.around(circles))
 					d0 = 1000
-					min = np.array([10, 10, 10])
+					min = 0
 					for i in circles[0, :]:
 						d1 = np.linalg.norm(i[0:2] - cue[2:4])
 						if d1 < d0:
 							d0 = d1
 							min = i
-					print("Cue ball coordinates:", min)
-					# cv.circle(frame, (min[0], min[1]), min[2], (0, 255, 0), 2)
-					# cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
-			ball_queue.put(min) # Put stick back
+					# print("Cue ball coordinates:", min)
+					cv.circle(frame, (min[0], min[1]), min[2], (0, 255, 0), 2)
+					cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
+				ball_queue.put(min) # Put stick back
+				print('Ball coordinates: ', min)
 			print('P2 Put ball, queue size: ', ball_queue.qsize())
 		else:
 			time.sleep(0.03)
@@ -266,7 +274,7 @@ def process_physics(run_flag, ball_queue, line_queue, start_turn):
 			line_queue.put(res)
 			print('P3 Put line, queue size: ', line_queue.qsize())
 		else:
-			#print("Processor 3 Didn't Receive Frame, sleep for 30ms")
+			# print("Processor 3 Didn't Receive Frame, sleep for 30ms")
 			time.sleep(0.03)
 	print("Quiting P3")
 	print('P3 ball queue empty: ', ball_queue.empty())
@@ -275,12 +283,9 @@ RES_X = 640
 RES_Y = 480
 CENTER_X = RES_X/2
 CENTER_Y = RES_Y/2
-cap = cv.VideoCapture(0)
-if not cap.isOpened():
-	print("Cannot open camera")
-	exit()
-cap.set(cv.CAP_PROP_FRAME_WIDTH, RES_X)
-cap.set(cv.CAP_PROP_FRAME_HEIGHT, RES_Y)
+# cap = cv.VideoCapture(0)
+# cap.set(cv.CAP_PROP_FRAME_WIDTH, RES_X)
+# cap.set(cv.CAP_PROP_FRAME_HEIGHT, RES_Y)
 
 #Global Run Flag
 table = np.array([])

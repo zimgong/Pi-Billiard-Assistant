@@ -101,18 +101,7 @@ def simulate_ball(object, num_iter, image, hull, lines, flag):
     # cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
     return lines
 
-cue_stick = np.array([135, 670, 185, 661])
-table = np.array([[1215, 620],[1179, 680], [1163, 682],
-                  [80, 809], [59, 810], [58, 810],
-                  [12, 774], [12, 263], [56, 223], 
-                  [77, 217], [100, 214], [526, 161], 
-                  [1043, 98], [1047, 98], [1055, 101], 
-                  [1108, 135], [1114, 145], [1215, 608]
-                  ])
-cue_ball = np.array([240, 660, 11])
-hull = ConvexHull(table) 
-stick_euclid = np.linalg.norm(cue_stick[2:4]-cue_stick[0:2])/15
-obj_stick = Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 5)
+# 
 
 # print(point_in_hull(np.array([0, 0]), hull))
 

@@ -26,7 +26,8 @@ class Object:
             self.direct = collide_hull(self.direct[0:2], res)
             return False
         return True
-    
+
+# Check if a point is inside the convex hull
 def point_in_hull(point, hull, tolerance=1e-12):
         res = 0
         for eq in hull.equations:
@@ -61,7 +62,7 @@ def change_v(object1, object2):
     object2.direct = [u2[0], u2[1]]
 
 # Simulate the cue stick behavior, hits the cue ball and let the cue ball move
-def simulate_stick(object1, object2, num_iter, frame, hull):
+def simulate_stick(object1, object2, num_iter, image, hull):
     iter = 0
     collided = False
     ini_pos = copy.deepcopy(object1.pos)
@@ -74,40 +75,44 @@ def simulate_stick(object1, object2, num_iter, frame, hull):
         if collided:
             change_v(object1, object2)
             lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
-            lines = simulate_ball(object2, num_iter, frame, hull, lines, True)
+            # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
+            lines = simulate_ball(object2, num_iter, image, hull, lines, True)
             return lines
     if collided == False:
         lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+        # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
     return lines
 
 # Simulate the cue ball behavior, move the cue ball
-def simulate_ball(object, num_iter, frame, hull, lines, flag):
+def simulate_ball(object, num_iter, image, hull, lines, flag):
     iter = 0
     ini_pos = copy.deepcopy(object.pos)
     while iter <= num_iter:
         res = object.move(hull)
         if res == False:
             if flag == True:
-                simulate_ball(object, num_iter, frame, hull, False)
+                simulate_ball(object, num_iter, image, hull, lines, False)
             break
     lines.append([ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]])
+    # cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
     return lines
 
 def find_table(frame_hsv):
-	# hsv color range for blue pool table
-	lower_blue = np.array([100,50,50])
-	upper_blue = np.array([130,255,255])
-	# Mask out everything but the pool table (blue)
-	mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
-	# Find the pool table contour
-	contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-	# Find the largest contour as the border of the table
-	try:
-		table = max(contours, key = cv.contourArea)
-	except:
-		print("No table found!")
-		return None
-	return cv.convexHull(table)
+    # hsv color range for blue pool table
+    lower_blue = np.array([100,50,50])
+    upper_blue = np.array([130,255,255])
+    # Mask out everything but the pool table (blue)
+    mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
+    # cv.imshow("cropped table", mask)
+    # Find the pool table contour
+    contours, _ = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    # Find the largest contour as the border of the table
+    try:
+        table = max(contours, key = cv.contourArea)
+    except:
+        print("No table found!")
+        return None
+    return cv.convexHull(table)
 
 # Function for the Master Process
 def grab_frame_display(run_flag, frame_queue, line_queue):
@@ -115,7 +120,7 @@ def grab_frame_display(run_flag, frame_queue, line_queue):
 	start_datetime = datetime.now()
 	last_receive_time = 0
 	initial = True
-	cap = cv.VideoCapture('./769_480p.mp4')
+	cap = cv.VideoCapture('./802_480P.mp4')
 	cap.set(cv.CAP_PROP_FPS, 20)
 	if not cap.isOpened():
 		print("Cannot open camera")
@@ -174,10 +179,9 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 			frame_hsv = frame_queue.get()
 			print('P1 Get frame, queue size: ', frame_queue.qsize())
 			# hsv color range for pink cue stick
-			lower_pink = np.array([150, 40, 40])
-			upper_pink = np.array([165, 255, 255])
-			# Mask out everything but the cue stick (pink)
-			mask = cv.inRange(frame_hsv, lower_pink, upper_pink)
+			lower = np.array([150, 30, 30])
+			upper = np.array([165, 255, 255])
+			mask = cv.inRange(frame_hsv, lower, upper)
 			# Find the cue stick
 			lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, minLineLength=20, maxLineGap=0)
 			# print("Line coordinates:", lines)
@@ -186,8 +190,9 @@ def process_stick(run_flag, frame_queue, stick_queue, start_turn):
 				for i in range(0, len(lines)):
 					l = lines[i][0]
 					cue += l
+					cv.line(frame, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
 				cue = cue / len(lines)
-				cue = np.round(cue).astype(int)
+				cue = cue.astype(int)
 			print('	Cue coordinates: ', cue)
 			stick_queue.put(cue) # Put stick coordinates to queue
 			print('P1 Put stick, queue size: ', stick_queue.qsize())
@@ -202,19 +207,23 @@ def process_ball(run_flag, frame_queue, stick_queue, ball_queue, start_turn):
 		if not frame_queue.empty() and not stick_queue.empty() and start_turn.value == 2:
 			start_turn.value = 3
 			# Get frame from queue
-			frame_hsv = frame_queue.get()
+			cropped = frame_queue.get()
 			print('P2 Get frame, queue size: ', frame_queue.qsize())
+
 			sensitivity = 80
-			# hsv color range for white ball
-			lower_white = np.array([0, 0, 255 - sensitivity])
-			upper_white = np.array([255, sensitivity, 255])
-			# Mask out everything but the cue stick (pink)
-			mask = cv.inRange(frame_hsv, lower_white, upper_white)
+			hsv_img = cv.cvtColor(cropped, cv.COLOR_BGR2HSV)
+			lower = np.array([0, 0, 255 - sensitivity])
+			upper = np.array([255, sensitivity, 255])
+			mask = cv.inRange(hsv_img, lower, upper)
+			new_img = cv.bitwise_and(cropped, cropped, mask = mask)
+
 			circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=5, maxRadius=10)
 			# print("Ball coordinates:", circles)
+
 			cue = stick_queue.get() # Get stick coordinates from queue
-			print('Get cue', cue)
-			if cue is not 0:
+
+			min = 0
+			if cue is not None:
 				center = np.array([320, 240])
 				d0 = np.linalg.norm(cue[0:2] - center)
 				d1 = np.linalg.norm(cue[2:4] - center)
@@ -225,7 +234,6 @@ def process_ball(run_flag, frame_queue, stick_queue, ball_queue, start_turn):
 				if circles is not None:
 					circles = np.uint16(np.around(circles))
 					d0 = 1000
-					min = 0
 					for i in circles[0, :]:
 						d1 = np.linalg.norm(i[0:2] - cue[2:4])
 						if d1 < d0:
@@ -249,29 +257,16 @@ def process_physics(run_flag, ball_queue, line_queue, start_turn):
 	while run_flag.value:
 		if not ball_queue.empty() and start_turn.value == 3:
 			start_turn.value = 1
-			x = ball_queue.get()
+			min = ball_queue.get()
 			print('P3 Get ball, queue size: ', ball_queue.qsize())
-			cue_stick = np.array([135, 670, 185, 661])
-			cue_ball = np.array([240, 660, 11])
-			table = np.array([[1215, 620],[1179, 680], [1163, 682],
-                  [80, 809], [59, 810], [58, 810],
-                  [12, 774], [12, 263], [56, 223], 
-                  [77, 217], [100, 214], [526, 161], 
-                  [1043, 98], [1047, 98], [1055, 101], 
-                  [1108, 135], [1114, 145], [1215, 608]
-                  ])
-			cv.drawContours(frame, [table], -1, (255,255,255), 2)
-			for i in table:
-				cv.circle(frame, (i[0], i[1]), 2, (255,255,255), 2, cv.LINE_AA)
-			cv.line(frame, (cue_stick[0], cue_stick[1]), (cue_stick[2], cue_stick[3]), (0,0,0), 2, cv.LINE_AA)
-			cv.circle(frame, (cue_ball[0], cue_ball[1]), cue_ball[2], (255,0,255), 2, cv.LINE_AA)
-			hull = ConvexHull(table) # Turn the table coordinates into a convex hull
-			stick_euclid = np.linalg.norm(cue_stick[2:4]-cue_stick[0:2])/10
-			obj_stick = Object(cue_stick[2:4], 3, (cue_stick[2:4]-cue_stick[0:2])/stick_euclid, 4)
-			obj_ball = Object(cue_ball[0:1], 0, [0,0], cue_ball[2])
-			res = simulate_stick(obj_stick, obj_ball, 100, frame, hull)
-			res = [[10, 20, 30, 100], [20, 300, 167, 293]]
-			line_queue.put(res)
+			cue = np.array(cue, dtype=np.half)
+			min = np.array(min, dtype=np.half)
+			stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/15
+			vec = np.array((cue[2:4]-cue[0:2])/stick_euclid, dtype=np.half)
+			obj_stick = Object(cue[2:4], 3, vec, 5)
+			obj_ball = Object(min[0:2], 0, np.array([0, 0], dtype=np.half), min[2])
+			lines = simulate_stick(obj_stick, obj_ball, 100, frame, table)
+			line_queue.put(lines)
 			print('P3 Put line, queue size: ', line_queue.qsize())
 		else:
 			# print("Processor 3 Didn't Receive Frame, sleep for 30ms")

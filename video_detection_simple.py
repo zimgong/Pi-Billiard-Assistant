@@ -6,7 +6,7 @@ import time
 
 # cap = cv.VideoCapture('./696_720p.mp4')
 # cap = cv.VideoCapture('./716_720p.mp4')
-cap = cv.VideoCapture('./806_480P.mp4')
+cap = cv.VideoCapture('./805_480P.mp4')
 
 # cap = cv.VideoCapture(0)
 
@@ -22,10 +22,9 @@ class Object:
         self.radius = radius # Ball radius
 
     def move(self, hull): # Move the ball based on its direction vector
-        self.pos[0] += self.direct[0]
-        self.pos[1] += self.direct[1]
+        self.pos += self.direct
         # If the ball is out of the table, change its direction, not yet implemented
-        res = point_in_hull(self.pos, hull)
+        res = point_in_hull(self.pos + 3 * self.direct, hull)
         if res is not None:
             self.direct = collide_hull(self.direct[0:2], res)
             return False
@@ -66,39 +65,17 @@ def change_v(object1, object2):
     object2.direct = [u2[0], u2[1]]
 
 # Simulate the cue stick behavior, hits the cue ball and let the cue ball move
-def simulate_stick(object1, object2, num_iter, image, hull):
+def simulate_stick(object1, num_iter, image, hull, lines, flag):
     iter = 0
-    collided = False
     ini_pos = copy.deepcopy(object1.pos)
-    lines = []
     while iter <= num_iter:
         res = object1.move(hull)
         if res == False:
+            if flag > 0:
+                flag -= 1
+                lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
+                lines = simulate_stick(object1, num_iter, image, hull, lines, flag)
             break
-        collided = collide(object1, object2)
-        if collided:
-            change_v(object1, object2)
-            lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
-            # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
-            lines = simulate_ball(object2, num_iter, image, hull, lines, True)
-            return lines
-    if collided == False:
-        lines.append([ini_pos[0], ini_pos[1], object1.pos[0], object1.pos[1]])
-        # cv.line(image, (ini_pos[0], ini_pos[1]), (object1.pos[0], object1.pos[1]), (255,255,255), 2, cv.LINE_AA)
-    return lines
-
-# Simulate the cue ball behavior, move the cue ball
-def simulate_ball(object, num_iter, image, hull, lines, flag):
-    iter = 0
-    ini_pos = copy.deepcopy(object.pos)
-    while iter <= num_iter:
-        res = object.move(hull)
-        if res == False:
-            if flag == True:
-                simulate_ball(object, num_iter, image, hull, lines, False)
-            break
-    lines.append([ini_pos[0], ini_pos[1], object.pos[0], object.pos[1]])
-    # cv.line(image, (ini_pos[0], ini_pos[1]), (object.pos[0], object.pos[1]), (255,255,255), 2, cv.LINE_AA)
     return lines
 
 def find_table(frame_hsv):
@@ -120,7 +97,7 @@ def find_table(frame_hsv):
 
 while cap.isOpened():
     ret, frame = cap.read()
-    # time.sleep(0.05)
+    time.sleep(0.05)
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
         cap.release()
@@ -135,7 +112,7 @@ while cap.isOpened():
     new_mask = np.zeros_like(frame)
     img_new = cv.drawContours(new_mask, [table], -1, (255, 255, 255), -1)
     cropped = cv.bitwise_and(frame, img_new)
-    cv.imshow("cropped", cropped)
+    # cv.imshow("cropped", cropped)
 
     lower = np.array([140, 50, 50])
     upper = np.array([170, 255, 255])
@@ -154,16 +131,6 @@ while cap.isOpened():
         cue = cue.astype(int)
     print(lines)
 
-    sensitivity = 80
-    hsv_img = cv.cvtColor(cropped, cv.COLOR_BGR2HSV)
-    lower = np.array([0, 0, 255 - sensitivity])
-    upper = np.array([255, sensitivity, 255])
-    mask = cv.inRange(hsv_img, lower, upper)
-    new_img = cv.bitwise_and(cropped, cropped, mask = mask)
-
-    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, 1, 20, param1=11, param2=11, minRadius=5, maxRadius=10)
-    # print("Ball coordinates:", circles)
-    min = 0
     if lines is not None:
         center = np.array([320, 240])
         d0 = np.linalg.norm(cue[0:2] - center)
@@ -172,32 +139,18 @@ while cap.isOpened():
             cue[0], cue[2] = cue[2], cue[0]
             cue[1], cue[3] = cue[3], cue[1]
         # print("Cue stick coordinates:", cue)
-        if circles is not None:
-            circles = np.uint16(np.around(circles))
-            d0 = 1000
-            for i in circles[0, :]:
-                d1 = np.linalg.norm(i[0:2] - cue[2:4])
-                if d1 < d0:
-                    d0 = d1
-                    min = i
-            # print("Cue ball coordinates:", min)
-            cv.circle(frame, (min[0], min[1]), min[2], (0, 255, 0), 2)
-            cv.circle(frame, (min[0], min[1]), 2, (0, 0, 255), 3)
-            cv.line(frame, (cue[2], cue[3]), (min[0], min[1]), (255,255,0), 2, cv.LINE_AA)
 
     hull = ConvexHull(table[:,0,:]) # Turn the table coordinates into a convex hull
 
-    if cue is not 0 and min is not 0:
+    if cue is not 0:
         # print(hull.points)
         print('Found cue!', cue)
-        # print('Found balls!', min)
         cue = np.array(cue, dtype=np.half)
-        min = np.array(min, dtype=np.half)
         stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/15
         vec = np.array((cue[2:4]-cue[0:2])/stick_euclid, dtype=np.half)
         obj_stick = Object(cue[2:4], 3, vec, 5)
-        obj_ball = Object(min[0:2], 0, np.array([0, 0], dtype=np.half), min[2])
-        lines = simulate_stick(obj_stick, obj_ball, 100, frame, hull)
+        lines = []
+        lines = simulate_stick(obj_stick, 100, frame, hull, lines, 3)
         print(lines)
         new_mask = np.zeros_like(frame)
         for i in lines:

@@ -1,5 +1,5 @@
 from datetime import datetime
-from multiprocessing import Process, Queue, Value, Pool
+from multiprocessing import Process, Queue, Value
 from scipy.spatial import ConvexHull
 import copy
 import cv2 as cv
@@ -96,7 +96,7 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 	start_datetime = datetime.now() # Initialize start time
 	last_receive_time = 0 # Initialize last receive time
 	initial = True # Flag for first frame
-	cap = cv.VideoCapture('./807_480P.mp4') # Test mode, load video
+	cap = cv.VideoCapture('./806_480P.mp4') # Test mode, load video
 	# cap.set(cv.CAP_PROP_FPS, 20) # Set frame rate, testing
 	if not cap.isOpened():
 		print("Cannot open camera")
@@ -132,10 +132,13 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 			lines = line_queue.get()
 			print('P0 Get line, queue size: ', line_queue.qsize())
 		if time.time() - last_receive_time < 0.5:
+			blank = np.zeros_like(frame)
 			print('P0 Draw lines')
 			for i in lines: # Draw lines to OpenCV frame
-				cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 0), 2, cv.LINE_AA)
-		cv.imshow('frame', frame) # Display the resulting frame
+				cv.line(blank, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (255, 255, 255), 2, cv.LINE_AA)
+			cv.namedWindow('frame', cv.WND_PROP_FULLSCREEN) # Display full screen
+			cv.setWindowProperty('frame', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+			cv.imshow('frame', blank) # Display the resulting frame
 		if cv.waitKey(1) == ord('q'): # Press q to quit
 			cap.release() # Release camera
 			cv.destroyAllWindows() # Close all windows

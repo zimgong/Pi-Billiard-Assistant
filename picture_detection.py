@@ -14,7 +14,7 @@ import time
 
 # ret, frame = cap.read()
 
-frame = cv.imread('frame_7.jpg')
+frame = cv.imread('frame_10.jpg')
 
 # Define a class for balls and the move function
 class Object:
@@ -107,11 +107,11 @@ table = find_table(frame_hsv)
 new_mask = np.zeros_like(frame)
 img_new = cv.drawContours(new_mask, [table], -1, (255, 255, 255), -1)
 cropped = cv.bitwise_and(frame_hsv, img_new)
-# cv.imshow("cropped", cropped)
+cv.imshow("cropped", cropped)
 
 sensitivity = 80
-lower = np.array([145, 10, 10])
-upper = np.array([255, 255, 255])
+lower = np.array([145, 5, 5])
+upper = np.array([260, 255, 255])
 mask = cv.inRange(cropped, lower, upper)
 cv.imshow("mask", mask)
 lines = cv.HoughLinesP(mask, 1, np.pi/180, 50, None, 20, 0)
@@ -142,7 +142,7 @@ if cue is not 0:
     print('Found cue!', cue)
     # print('Found balls!', min)
     cue = np.array(cue, dtype=np.half)
-    stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/15
+    stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/5
     vec = np.array((cue[2:4]-cue[0:2])/stick_euclid, dtype=np.half)
     obj_stick = Object(cue[2:4], 3, vec, 5)
     lines = []

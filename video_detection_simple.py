@@ -152,7 +152,7 @@ while cap.isOpened():
         lines = []
         lines = simulate_stick(obj_stick, 100, frame, hull, lines, 3)
         print(lines)
-        new_mask = np.zeros_like(frame)
+        # new_mask = np.zeros_like(frame)
         for i in lines:
             cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0,255,0), 2, cv.LINE_AA)
 

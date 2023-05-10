@@ -1,28 +1,17 @@
-from datetime import datetime
-from multiprocessing import Process, Queue, Value
-from scipy.spatial import ConvexHull
+import argparse
+import base64
 import copy
 import cv2 as cv
+from datetime import datetime
+from multiprocessing import Process, Queue, Value
 import numpy as np
+from scipy.spatial import ConvexHull
 import time
-# import RPi.GPIO as GPIO
-import pygame
-from pygame.locals import * # for event MOUSE variables
 import zmq
-import base64
 
-# os.putenv('SDL_VIDEODRIVER','fbcon') # Display on piTFT
-# os.putenv('SDL_FBDEV','/dev/fb1')    #
-# os.putenv('SDL_MOUSEDRV', 'TSLIB')   # Track mouse clicks on piTFT
-# os.putenv('SDL_MOUSEDEV', '/dev/input/touchscreen')
-
-def GPIO26_callback(channel): # GPIO 26 quit button
-    global run_flag
-    global code_run
-    run_flag.value = not run_flag.value
-    code_run = not code_run
-    # GPIO.cleanup()
-    print("Button pressed")
+parser = argparse.ArgumentParser(description='Main script for pool game detection on raspberry pi.')
+parser.add_argument('--mode', type=str, help='user/developer mode', default='user')
+args = parser.parse_args()
 
 # Define a class for balls and the move function
 class Object:
@@ -35,7 +24,7 @@ class Object:
     def move(self, hull): # Move the ball based on its direction vector
         self.pos += self.direct
         # If the ball is out of the table, change its direction, not yet implemented
-        res = point_in_hull(self.pos + 3 * self.direct, hull)
+        res = point_in_hull(self.pos + 2 * self.direct, hull)
         if res is not None:
             self.direct = collide_hull(self.direct[0:2], res)
             return False
@@ -91,8 +80,8 @@ def simulate_stick(object1, num_iter, image, hull, lines, flag):
 
 def find_table(frame_hsv):
     # hsv color range for blue pool table
-    lower_blue = np.array([100,100,100])
-    upper_blue = np.array([130,255,255])
+    lower_blue = np.array([100,120,120])
+    upper_blue = np.array([120,255,255])
     # Mask out everything but the pool table (blue)
     mask = cv.inRange(frame_hsv, lower_blue, upper_blue)
     # cv.imshow("cropped table", mask)
@@ -107,12 +96,11 @@ def find_table(frame_hsv):
     return cv.convexHull(table)
 
 # Master process, grab frames from camera and show frames with rendered lines
-def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
+def grab_frame_display(run_flag, frame_queue, line_queue, table_queue, dev):
 	IP = '10.48.155.12'
 	context = zmq.Context()
 	footage_socket = context.socket(zmq.PAIR)
 	footage_socket.connect('tcp://' + IP + ':5555')
-	print(IP)
 	start_datetime = datetime.now() # Initialize start time
 	last_receive_time = 0 # Initialize last receive time
 	initial = True # Flag for first frame
@@ -135,12 +123,12 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 		# Convert to hsv color space
 		frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 		# Find the pool table if it is the first frame
-		if initial:
+		if initial or table is None:
 			try:
 				table = find_table(frame_hsv)
-				table = ConvexHull(table[:,0,:]) # Convert to ConvexHull object
-				table_queue.put(table) # Send table to queue
-				# print('P0 Put table, queue size: ', table_queue.qsize())
+				hull = ConvexHull(table[:,0,:]) # Convert to ConvexHull object
+				table_queue.put(hull) # Send table to queue
+				print('P0 Put table, queue size: ', table_queue.qsize())
 			except:
 				print("No table found!")
 			initial = False
@@ -150,19 +138,24 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 		delta_time_ms = delta_time.total_seconds()*1000
 		if delta_time_ms > 10 and frame_queue.qsize() < 4: # If past time and queue is not full, send to queue
 			start_datetime = curr_datetime # Update start time
-			frame_queue.put(frame_hsv) # Send frame to queue
-			# print('P0 Put frame, queue size: ', frame_queue.qsize())
+			new_mask = np.zeros_like(frame)
+			img_new = cv.drawContours(new_mask, [table], -1, (255, 255, 255), -1)
+			cropped = cv.bitwise_and(frame_hsv, img_new)
+			frame_queue.put(cropped) # Send frame to queue
+			print('P0 Put frame, queue size: ', frame_queue.qsize())
 		if not line_queue.empty(): # Receive lines from queue
 			last_receive_time = time.time()
 			lines = line_queue.get()
-			# print('P0 Get line, queue size: ', line_queue.qsize())
+			print('P0 Get line, queue size: ', line_queue.qsize())
 		if time.time() - last_receive_time < 0.5:
 			for i in lines: # Draw lines to OpenCV frame
 				cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 255), 2, cv.LINE_AA)
-			# cv.imshow('frame', frame) # Display the resulting frame
-		encoded, buffer = cv.imencode('.jpg', frame)
+			if dev:
+				cv.drawContours(frame, [table], -1, (255, 255, 255), 2) # Draw table contour
+		_, buffer = cv.imencode('.jpg', frame)
 		jpg_as_text = base64.b64encode(buffer)
 		footage_socket.send(jpg_as_text)
+		# cv.imshow('frame', frame) # Display the resulting frame
 		if cv.waitKey(1) == ord('q'): # Press q to quit
 			cap.release() # Release camera
 			cv.destroyAllWindows() # Close all windows
@@ -175,32 +168,40 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 	print('P0 line queue empty: ', line_queue.empty())
 
 # Process 1 detects the stick, it is exactly the same as Process 2
-def process_stick_1(run_flag, frame_queue, stick_queue):
+def process_stick_1(run_flag, frame_queue, stick_queue, dev):
 	while run_flag.value:
 		if not frame_queue.empty():
 			frame_hsv = frame_queue.get() # Get frame from queue
-			# print('P1 Get frame, queue size: ', frame_queue.qsize())
+			print('P1 Get frame, queue size: ', frame_queue.qsize())
 			# color range for pick stick
-			# lower = np.array([140, 50, 50])
-			# upper = np.array([170, 255, 255])
-
-			lower = np.array([145, 5, 5])
-			upper = np.array([260, 255, 255])
+			sensitivity = 150
+			lower = np.array([0, 0, sensitivity])
+			upper = np.array([255, 255-sensitivity, 255])
 			try:
 				mask = cv.inRange(frame_hsv, lower, upper)
 				# Detect lines for stick
-				lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, None, 20, 0)
+				lines = None
+				start_length = 320
+				while lines is None:
+					start_length = start_length / 2
+					lines = cv.HoughLinesP(mask, 1, np.pi/180, 120, None, minLineLength=start_length, maxLineGap=20)
+					if start_length < 50:
+						break
 				# print("Line coordinates:", lines)
 				cue = 0 # Take the average coordinates for the lines
+				n = 0
 				if lines is not None:
 					for i in range(0, len(lines)):
 						l = lines[i][0]
-						cue += l
+						cond1 = l[1] > 130 and l[1] < 160 and l[3] > 130 and l[3] < 160
+						cond2 = l[1] > 340 and l[1] < 370 and l[3] > 340 and l[3] < 370
+						cond3 = l[0] > 0 and l[0] < 60 and l[2] > 0 and l[2] < 60
+						if not (cond1 or cond2 or cond3):
+							cue += l
+							n += 1
 						cv.line(frame, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
-					cue = cue / len(lines)
+					cue = cue / n
 					cue = cue.astype(int) # Stick coordinates have to be integers to be printed on the frame
-				# print("Line coordinates:", lines)
-				if lines is not None: 
 					# Decide the line direction by measuring the distance to the center of the frame
 					# Take the endpoint closer to the center as the tip of the stick
 					center = np.array([320, 240])
@@ -210,8 +211,8 @@ def process_stick_1(run_flag, frame_queue, stick_queue):
 						cue[0], cue[2] = cue[2], cue[0]
 						cue[1], cue[3] = cue[3], cue[1]
 				stick_queue.put(cue) # Put stick coordinates to queue
-				# print('P1 Cue coordinates: ', cue) # Print to verify queue contents
-				# print('P1 Put stick, queue size: ', stick_queue.qsize())
+				print('P1 Cue coordinates: ', cue) # Print to verify queue contents
+				print('P1 Put stick, queue size: ', stick_queue.qsize())
 			except:
 				print("No stick found!")
 		else:
@@ -225,32 +226,42 @@ def process_stick_1(run_flag, frame_queue, stick_queue):
 	print('P1 stick queue empty: ', stick_queue.empty())
 
 # Process 2 detects the stick
-def process_stick_2(run_flag, frame_queue, stick_queue):
+def process_stick_2(run_flag, frame_queue, stick_queue, dev):
 	while run_flag.value:
 		if not frame_queue.empty():
-			# Get frame from queue
-			frame_hsv = frame_queue.get()
-			# print('P2 Get frame, queue size: ', frame_queue.qsize())
-			# lower = np.array([140, 50, 50])
-			# upper = np.array([170, 255, 255])
-			lower = np.array([145, 5, 5])
-			upper = np.array([260, 255, 255])
-			try: 
+			frame_hsv = frame_queue.get() # Get frame from queue
+			print('P2 Get frame, queue size: ', frame_queue.qsize())
+			# color range for pick stick
+			sensitivity = 150
+			lower = np.array([0, 0, sensitivity])
+			upper = np.array([255, 255-sensitivity, 255])
+			try:
 				mask = cv.inRange(frame_hsv, lower, upper)
-				# cv.imshow("mask", mask)
-
-				lines = cv.HoughLinesP(mask, 1, np.pi/180, 40, None, 20, 0)
-				# print("Line coordinates:", lines)
-				cue = 0
+				# Detect lines for stick
+				lines = None
+				start_length = 320
+				while lines is None:
+					start_length = start_length / 2
+					lines = cv.HoughLinesP(mask, 1, np.pi/180, 120, None, minLineLength=start_length, maxLineGap=20)
+					if start_length < 50:
+						break
+				print("Line coordinates:", lines)
+				cue = 0 # Take the average coordinates for the lines
+				n = 0
 				if lines is not None:
 					for i in range(0, len(lines)):
 						l = lines[i][0]
-						cue += l
+						cond1 = l[1] > 130 and l[1] < 160 and l[3] > 130 and l[3] < 160
+						cond2 = l[1] > 340 and l[1] < 370 and l[3] > 340 and l[3] < 370
+						cond3 = l[0] > 0 and l[0] < 60 and l[2] > 0 and l[2] < 60
+						if not (cond1 or cond2 or cond3):
+							cue += l
+							n += 1
 						cv.line(frame, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
-					cue = cue / len(lines)
-					cue = cue.astype(int)
-				# print(lines)
-				if lines is not None:
+					cue = cue / n
+					cue = cue.astype(int) # Stick coordinates have to be integers to be printed on the frame
+					# Decide the line direction by measuring the distance to the center of the frame
+					# Take the endpoint closer to the center as the tip of the stick
 					center = np.array([320, 240])
 					d0 = np.linalg.norm(cue[0:2] - center)
 					d1 = np.linalg.norm(cue[2:4] - center)
@@ -258,8 +269,8 @@ def process_stick_2(run_flag, frame_queue, stick_queue):
 						cue[0], cue[2] = cue[2], cue[0]
 						cue[1], cue[3] = cue[3], cue[1]
 				stick_queue.put(cue) # Put stick coordinates to queue
-				# print('P2 Cue coordinates: ', cue)
-				# print('P2 Put stick, queue size: ', stick_queue.qsize())
+				print('P2 Cue coordinates: ', cue) # Print to verify queue contents
+				print('P2 Put stick, queue size: ', stick_queue.qsize())
 			except:
 				print("No stick found!")
 		else:
@@ -273,7 +284,7 @@ def process_stick_2(run_flag, frame_queue, stick_queue):
 	print('P2 stick queue empty: ', stick_queue.empty())
 
 # Process 3 computes Physics
-def process_physics(run_flag, stick_queue, line_queue, table_queue):
+def process_physics(run_flag, stick_queue, line_queue, table_queue, dev):
 	table = []
 	while run_flag.value:
 		if not stick_queue.empty():
@@ -282,9 +293,9 @@ def process_physics(run_flag, stick_queue, line_queue, table_queue):
 			cue = stick_queue.get()
 			if cue is None:
 				break
-			# print('P3 Get stick, queue size: ', stick_queue.qsize())
+			print('P3 Get stick, queue size: ', stick_queue.qsize())
 			cue = np.array(cue, dtype=np.half)
-			# print('P3 Cue coordinates: ', cue)
+			print('P3 Cue coordinates: ', cue)
 			try:
 				stick_euclid = np.linalg.norm(cue[2:4]-cue[0:2])/15
 				vec = np.array((cue[2:4]-cue[0:2])/stick_euclid, dtype=np.half)
@@ -292,11 +303,11 @@ def process_physics(run_flag, stick_queue, line_queue, table_queue):
 				lines = []
 				lines = simulate_stick(obj_stick, 100, frame, table, lines, 3)
 				line_queue.put(lines)
-				# print('P3 Put line, queue size: ', line_queue.qsize())
+				print('P3 Put line, queue size: ', line_queue.qsize())
 			except:
 				print("No stick detected")
 		else:
-			# print("Processor 3 Didn't Receive Frame, sleep for 30ms")
+			print("Processor 3 Didn't Receive Frame, sleep for 30ms")
 			time.sleep(0.03)
 	while not stick_queue.empty():
 		x = stick_queue.get()
@@ -313,68 +324,16 @@ CENTER_Y = RES_Y/2
 # cap.set(cv.CAP_PROP_FRAME_HEIGHT, RES_Y)
 
 #Global Run Flag
-table = []
+table = None
 frame = 0
 
-if __name__ == '__main__':
-    code_run = True
-    # GPIO.setmode(GPIO.BCM) # Initialize GPIO mode and setup input pin
-    # GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    # GPIO.add_event_detect(26, GPIO.FALLING, callback=GPIO26_callback, bouncetime=300)
-    # Initialize pygame and set general parameters
-    # pygame.init() # MUST occur AFTER os enviroment variable calls
-    # pygame.mouse.set_visible(True)
-    # WHITE = 255, 255, 255
-    # BLACK = 0, 0, 0
-    # screen = pygame.display.set_mode((RES_X, RES_Y)) # Set screen size
-    
-    # # Define the buttons and the font
-    # my_font = pygame.font.Font('From Cartoon Blocks.ttf', 50) # Font size 50
-    # my_buttons = {'quit':(RES_X/2, 400)} # Button dictionary
-    # screen.fill(BLACK) # Erase the work space
-    
-    # header_font = pygame.font.Font('From Cartoon Blocks.ttf', 60)
-    # header_text = header_font.render("Pi Billiard Assistant", True, WHITE)
-    # header_rect = header_text.get_rect(center=(RES_X/2, 120))
-    # screen.blit(header_text, header_rect)
-    
-    # script_font = pygame.font.Font('From Cartoon Blocks.ttf', 40)
-    # script_text = script_font.render("Press the button to start", True, WHITE)
-    # script_rect = script_text.get_rect(center=(RES_X/2, 320))
-    # screen.blit(script_text, script_rect)
-    
-    # ball_img = pygame.transform.scale(pygame.image.load('balls.png'), (100, 100))
-    # ball_rect = ball_img.get_rect()
-    # ball_rect = ball_rect.move((390, 160))
-    # screen.blit(ball_img, ball_rect)
-    # stick_img = pygame.transform.scale(pygame.image.load('stick.png'), (200, 50))
-    # stick_rect = stick_img.get_rect()
-    # stick_rect = stick_rect.move((150, 220))
-    # screen.blit(stick_img, stick_rect)
-    
-    # # Initialize the button and display it on the screen
-    # my_buttons_rect = {}
-    # for my_text, text_pos in my_buttons.items():
-    #     text_surface = my_font.render(my_text, True, WHITE)
-    #     rect = text_surface.get_rect(center=text_pos)
-    #     screen.blit(text_surface, rect)
-    #     my_buttons_rect[my_text] = rect # save rect for 'my-text' button
-    
-    # pygame.display.flip()
-    run_flag = Value('i', 1) 
+if args.mode == 'dev':
+	dev = True
+else:
+	dev = False
 
-    # while code_run: # main loop
-    #     for event in pygame.event.get(): # for detecting an event for touch screen...
-    #         if (event.type == MOUSEBUTTONDOWN):
-    #             pos = pygame.mouse.get_pos()
-    #         elif (event.type == MOUSEBUTTONUP):
-    #             pos = pygame.mouse.get_pos()
-    #             for (my_text, rect) in my_buttons_rect.items(): # for saved button rects...
-    #                 if (rect.collidepoint(pos)): # if collide with mouse click...
-    #                     if (my_text == 'quit'): # indicate correct button press
-    #                         code_run = False
-    #                         run_flag.value = 1
-    
+if __name__ == '__main__':
+    run_flag = Value('i', 1) 
     # run_flag controls all processes
     # initialize queues for inter-process communication
     frame_queue = Queue()
@@ -382,10 +341,10 @@ if __name__ == '__main__':
     line_queue = Queue()
     table_queue = Queue()
     # initialize processes
-    p0 = Process(target=grab_frame_display, args=(run_flag, frame_queue, line_queue, table_queue))
-    p1 = Process(target=process_stick_1, args=(run_flag, frame_queue, stick_queue))
-    p2 = Process(target=process_stick_2, args=(run_flag, frame_queue, stick_queue))
-    p3 = Process(target=process_physics, args=(run_flag, stick_queue, line_queue, table_queue))
+    p0 = Process(target=grab_frame_display, args=(run_flag, frame_queue, line_queue, table_queue, dev))
+    p1 = Process(target=process_stick_1, args=(run_flag, frame_queue, stick_queue, dev))
+    p2 = Process(target=process_stick_2, args=(run_flag, frame_queue, stick_queue, dev))
+    p3 = Process(target=process_physics, args=(run_flag, stick_queue, line_queue, table_queue, dev))
     # start processes
     p0.start()
     p1.start()

@@ -1,20 +1,24 @@
+#
+# W_yz2874_zg284 5/9/2023 Pi Camera Picture Test
+#
+
 import cv2 as cv
 import numpy as np
 import copy
 from scipy.spatial import ConvexHull
 import time
 
-# RES_X = 640
-# RES_Y = 480
-# cap = cv.VideoCapture(0)
-# cap.set(cv.CAP_PROP_FRAME_WIDTH, RES_X)
-# cap.set(cv.CAP_PROP_FRAME_HEIGHT, RES_Y)
+RES_X = 640
+RES_Y = 480
+cap = cv.VideoCapture(0)
+cap.set(cv.CAP_PROP_FRAME_WIDTH, RES_X)
+cap.set(cv.CAP_PROP_FRAME_HEIGHT, RES_Y)
 
-# time.sleep(1)
+time.sleep(1)
 
-# ret, frame = cap.read()
+ret, frame = cap.read()
 
-frame = cv.imread('frame_10.jpg')
+# frame = cv.imread('frame_2.jpg')
 
 # Define a class for balls and the move function
 class Object:
@@ -107,13 +111,15 @@ table = find_table(frame_hsv)
 new_mask = np.zeros_like(frame)
 img_new = cv.drawContours(new_mask, [table], -1, (255, 255, 255), -1)
 cropped = cv.bitwise_and(frame_hsv, img_new)
-cv.imshow("cropped", cropped)
+cv.imwrite('cropped.jpg', cropped)
+# cv.imshow("cropped", cropped)
 
 sensitivity = 80
 lower = np.array([145, 5, 5])
-upper = np.array([260, 255, 255])
+upper = np.array([255, 255, 255])
 mask = cv.inRange(cropped, lower, upper)
-cv.imshow("mask", mask)
+cv.imwrite('mask.jpg', mask)
+# cv.imshow("mask", mask)
 lines = cv.HoughLinesP(mask, 1, np.pi/180, 50, None, 20, 0)
 # print("Line coordinates:", lines)
 cue = 0
@@ -121,7 +127,7 @@ if lines is not None:
     for i in range(0, len(lines)):
         l = lines[i][0]
         cue += l
-        cv.line(frame, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
+        # cv.line(frame, (l[0], l[1]), (l[2], l[3]), (0,0,0), 2, cv.LINE_AA)
     cue = cue / len(lines)
     cue = cue.astype(int)
 print(lines)
@@ -149,15 +155,15 @@ if cue is not 0:
     lines = simulate_stick(obj_stick, 100, frame, hull, lines, 3)
     print(lines)
     new_mask = np.zeros_like(frame)
-    for i in lines:
-        cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0,255,0), 2, cv.LINE_AA)
+    # for i in lines:
+    #     cv.line(frame, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0,255,0), 2, cv.LINE_AA)
 
 # cv.imshow("frame", frame)
 # if cv.waitKey(1) == ord('q'):
 #         cv.destroyAllWindows()
 
-# cv.imwrite('frame.jpg', frame)
-cv.imshow("frame", frame)
-cv.waitKey(0)
-# cap.release()
+cv.imwrite('frame.jpg', frame)
+# cv.imshow("frame", frame)
+# cv.waitKey(0)
+cap.release()
 cv.destroyAllWindows()

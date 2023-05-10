@@ -1,7 +1,3 @@
-#
-# W_yz2874_zg284 5/9/2023 Frame for Multi Processing
-#
-
 from datetime import datetime
 from multiprocessing import Process, Queue, Value
 from scipy.spatial import ConvexHull
@@ -9,6 +5,17 @@ import copy
 import cv2 as cv
 import numpy as np
 import time
+# import RPi.GPIO as GPIO
+import pygame
+from pygame.locals import * # for event MOUSE variables
+
+def GPIO26_callback(channel): # GPIO 26 quit button
+    global run_flag
+    global code_run
+    run_flag.value = not run_flag.value
+    code_run = not code_run
+    # GPIO.cleanup()
+    print("Finished! Quit...")
 
 # Define a class for balls and the move function
 class Object:
@@ -97,8 +104,10 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 	start_datetime = datetime.now() # Initialize start time
 	last_receive_time = 0 # Initialize last receive time
 	initial = True # Flag for first frame
-	cap = cv.VideoCapture('./806_480P.mp4') # Test mode, load video
+	cap = cv.VideoCapture('806_480P.mp4') # Test mode, load video
 	# cap.set(cv.CAP_PROP_FPS, 20) # Set frame rate, testing
+	cv.namedWindow('frame', cv.WINDOW_NORMAL) # Display full screen
+	cv.setWindowProperty('frame', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 	if not cap.isOpened():
 		print("Cannot open camera")
 		exit()
@@ -115,10 +124,13 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 		frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 		# Find the pool table if it is the first frame
 		if initial:
-			table = find_table(frame_hsv)
-			table = ConvexHull(table[:,0,:]) # Convert to ConvexHull object
-			table_queue.put(table) # Send table to queue
-			print('P0 Put table, queue size: ', table_queue.qsize())
+			try:
+				table = find_table(frame_hsv)
+				table = ConvexHull(table[:,0,:]) # Convert to ConvexHull object
+				table_queue.put(table) # Send table to queue
+				print('P0 Put table, queue size: ', table_queue.qsize())
+			except:
+				print("No table found!")
 			initial = False
 		# Check if time since last send to queue exceeds 30ms
 		curr_datetime = datetime.now()
@@ -138,8 +150,6 @@ def grab_frame_display(run_flag, frame_queue, line_queue, table_queue):
 			print('P0 Draw lines')
 			for i in lines: # Draw lines to OpenCV frame
 				cv.line(blank, (int(i[0]), int(i[1])), (int(i[2]), int(i[3])), (0, 255, 255), 2, cv.LINE_AA)
-			cv.namedWindow('frame', cv.WINDOW_NORMAL) # Display full screen
-			cv.setWindowProperty('frame', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 			cv.imshow('frame', blank) # Display the resulting frame
 		if cv.waitKey(1) == ord('q'): # Press q to quit
 			cap.release() # Release camera
@@ -287,25 +297,82 @@ table = []
 frame = 0
 
 if __name__ == '__main__':
-	# run_flag controls all processes
-	run_flag = Value('i', 1) 
-	# initialize queues for inter-process communication
-	frame_queue = Queue()
-	stick_queue = Queue()
-	line_queue = Queue()
-	table_queue = Queue()
-	# initialize processes
-	p0 = Process(target=grab_frame_display, args=(run_flag, frame_queue, line_queue, table_queue))
-	p1 = Process(target=process_stick_1, args=(run_flag, frame_queue, stick_queue))
-	p2 = Process(target=process_stick_2, args=(run_flag, frame_queue, stick_queue))
-	p3 = Process(target=process_physics, args=(run_flag, stick_queue, line_queue, table_queue))
-	# start processes
-	p0.start()
-	p1.start()
-	p2.start()
-	p3.start()
-	# wait for processes to finish
-	p0.join()
-	p1.join()
-	p2.join()
-	p3.join()
+    code_run = True
+    # GPIO.setmode(GPIO.BCM) # Initialize GPIO mode and setup input pin
+    # GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    # GPIO.add_event_detect(26, GPIO.FALLING, callback=GPIO26_callback, bouncetime=300)
+    # Initialize pygame and set general parameters
+    pygame.init() # MUST occur AFTER os enviroment variable calls
+    pygame.mouse.set_visible(True)
+    WHITE = 255, 255, 255
+    BLACK = 0, 0, 0
+    screen = pygame.display.set_mode((640, 480)) # Set screen size
+    
+    # Define the buttons and the font
+    my_font = pygame.font.Font('From Cartoon Blocks.ttf', 50) # Font size 50
+    my_buttons = {'quit':(320, 400)} # Button dictionary
+    screen.fill(BLACK) # Erase the work space
+    
+    header_font = pygame.font.Font('From Cartoon Blocks.ttf', 60)
+    header_text = header_font.render("Pi Billiard Assistant", True, WHITE)
+    header_rect = header_text.get_rect(center=(320, 120))
+    screen.blit(header_text, header_rect)
+    
+    script_font = pygame.font.Font('From Cartoon Blocks.ttf', 40)
+    script_text = script_font.render("Press the button to start", True, WHITE)
+    script_rect = script_text.get_rect(center=(320, 320))
+    screen.blit(script_text, script_rect)
+    
+    ball_img = pygame.transform.scale(pygame.image.load('balls.png'), (100, 100))
+    ball_rect = ball_img.get_rect()
+    ball_rect = ball_rect.move((390, 160))
+    screen.blit(ball_img, ball_rect)
+    stick_img = pygame.transform.scale(pygame.image.load('stick.png'), (200, 50))
+    stick_rect = stick_img.get_rect()
+    stick_rect = stick_rect.move((150, 220))
+    screen.blit(stick_img, stick_rect)
+    
+    # Initialize the button and display it on the screen
+    my_buttons_rect = {}
+    for my_text, text_pos in my_buttons.items():
+        text_surface = my_font.render(my_text, True, WHITE)
+        rect = text_surface.get_rect(center=text_pos)
+        screen.blit(text_surface, rect)
+        my_buttons_rect[my_text] = rect # save rect for 'my-text' button
+    
+    pygame.display.flip()
+    run_flag = Value('i', 0) 
+
+    while code_run: # main loop
+        for event in pygame.event.get(): # for detecting an event for touch screen...
+            if (event.type == MOUSEBUTTONDOWN):
+                pos = pygame.mouse.get_pos()
+            elif (event.type == MOUSEBUTTONUP):
+                pos = pygame.mouse.get_pos()
+                for (my_text, rect) in my_buttons_rect.items(): # for saved button rects...
+                    if (rect.collidepoint(pos)): # if collide with mouse click...
+                        if (my_text == 'quit'): # indicate correct button press
+                            code_run = False
+                            run_flag.value = 1
+    
+    # run_flag controls all processes
+    # initialize queues for inter-process communication
+    frame_queue = Queue()
+    stick_queue = Queue()
+    line_queue = Queue()
+    table_queue = Queue()
+    # initialize processes
+    p0 = Process(target=grab_frame_display, args=(run_flag, frame_queue, line_queue, table_queue))
+    p1 = Process(target=process_stick_1, args=(run_flag, frame_queue, stick_queue))
+    p2 = Process(target=process_stick_2, args=(run_flag, frame_queue, stick_queue))
+    p3 = Process(target=process_physics, args=(run_flag, stick_queue, line_queue, table_queue))
+    # start processes
+    p0.start()
+    p1.start()
+    p2.start()
+    p3.start()
+    # wait for processes to finish
+    p0.join()
+    p1.join()
+    p2.join()
+    p3.join()

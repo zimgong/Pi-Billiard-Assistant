@@ -1,5 +1,10 @@
+#
+# W_yz2874_zg284 5/10/2023 Laptop Main Script
+#
+
 import base64
 import cv2 as cv
+import json
 import numpy as np
 import os
 import pygame
@@ -9,7 +14,7 @@ import zmq
 # Initialize pygame and set general parameters
 pygame.init() # MUST occur AFTER os enviroment variable calls
 pygame.mouse.set_visible(True) # Set mouse visibility
-RES_X = 640 # Set screen parameters
+RES_X = 640 # Set screen parametersns +
 RES_Y = 480
 WHITE = 255, 255, 255 # Set colors
 BLACK = 0, 0, 0
@@ -22,8 +27,8 @@ font_l = pygame.font.Font('From Cartoon Blocks.ttf', 60)
 
 # Define the buttons
 buttons_list = {'start':(RES_X/2, 325), 'calibrate':(RES_X/2, 375), 'quit':(RES_X/2, 425)} # Button dictionary
-buttons_cali_t = {'increase':(450, 175), 'decrease':(450, 275), 'done':(RES_X/2, 425)}
-buttons_cali_s = {'lower+':(450, 175), 'lower-':(450, 225), 'line+':(450, 275), 'line-':(450, 325), 'done':(RES_X/2, 425)}
+buttons_cali_t = {'blue':(450, 175), 'green':(450, 275), 'done':(RES_X/2, 425)}
+buttons_cali_s = {'increase +':(450, 175), 'decrease -':(450, 275), 'done':(RES_X/2, 425)}
 
 # Graphics
 ball_img = pygame.transform.scale(pygame.image.load('balls.png'), (100, 100))
@@ -118,6 +123,8 @@ while code_run:
                 break
     
     if calibrate:
+        color = [100, 120]
+        sens = 175
         cali_stage = 0
         screen.fill(BLACK) # Erase the work space
         header_text = font_l.render("Calibrate Table", True, WHITE)
@@ -129,6 +136,12 @@ while code_run:
             rect = text_surface.get_rect(center=text_pos)
             screen.blit(text_surface, rect)
             cali_t_rects[text] = rect # save rect for 'my-text' button
+        text_surface = font_s.render('table color', True, WHITE)
+        rect = text_surface.get_rect(center=(200, 150))
+        screen.blit(text_surface, rect)
+        text_surface = font_m.render('BLUE', True, WHITE)
+        rect = text_surface.get_rect(center=(200, 225))
+        screen.blit(text_surface, rect)
         pygame.display.flip()
         while cali_stage == 0:
             for event in pygame.event.get(): # for detecting an event for touch screen...
@@ -136,10 +149,36 @@ while code_run:
                     pos = pygame.mouse.get_pos()
                     for (text, rect) in cali_t_rects.items(): # for saved button rects...
                         if (rect.collidepoint(pos)): # if collide with mouse click...
-                            if (text == 'increase'): # indicate correct button press
-                                continue
-                            elif (text == 'decrease'): # indicate correct button press
-                                continue
+                            if (text == 'blue'): # indicate correct button press
+                                color = [100, 120]
+                                screen.fill(BLACK) # Erase the work space
+                                for text, text_pos in buttons_cali_t.items():
+                                    text_surface = font_s.render(text, True, WHITE)
+                                    rect = text_surface.get_rect(center=text_pos)
+                                    screen.blit(text_surface, rect)
+                                screen.blit(header_text, header_rect)
+                                text_surface = font_m.render('BLUE', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 225))
+                                screen.blit(text_surface, rect)
+                                text_surface = font_s.render('table color', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 150))
+                                screen.blit(text_surface, rect)
+                                pygame.display.flip()
+                            elif (text == 'green'): # indicate correct button press
+                                color = [50, 70]
+                                screen.fill(BLACK) # Erase the work space
+                                for text, text_pos in buttons_cali_t.items():
+                                    text_surface = font_s.render(text, True, WHITE)
+                                    rect = text_surface.get_rect(center=text_pos)
+                                    screen.blit(text_surface, rect)
+                                screen.blit(header_text, header_rect)
+                                text_surface = font_m.render('GREEN', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 225))
+                                screen.blit(text_surface, rect)
+                                text_surface = font_s.render('table color', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 150))
+                                screen.blit(text_surface, rect)
+                                pygame.display.flip()
                             elif (text == 'done'): # indicate correct button press
                                 cali_stage = 1
                                 break
@@ -153,6 +192,12 @@ while code_run:
             rect = text_surface.get_rect(center=text_pos)
             screen.blit(text_surface, rect)
             cali_s_rects[text] = rect # save rect for 'my-text' button
+        text_surface = font_m.render(str(sens), True, WHITE)
+        rect = text_surface.get_rect(center=(200, 225))
+        screen.blit(text_surface, rect)
+        text_surface = font_s.render('sensitivity', True, WHITE)
+        rect = text_surface.get_rect(center=(200, 150))
+        screen.blit(text_surface, rect)
         pygame.display.flip()
         while cali_stage == 1:      
             for event in pygame.event.get(): # for detecting an event for touch screen...
@@ -160,9 +205,51 @@ while code_run:
                     pos = pygame.mouse.get_pos()
                     for (text, rect) in cali_s_rects.items(): # for saved button rects...
                         if (rect.collidepoint(pos)): # if collide with mouse click...
-                            if (text == 'done'): # indicate correct button press
+                            if (text == 'increase +'): # indicate correct button press
+                                sens += 5
+                                screen.fill(BLACK) # Erase the work space
+                                text_surface = font_m.render(str(sens), True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 225))
+                                screen.blit(text_surface, rect)
+                                for text, text_pos in buttons_cali_s.items():
+                                    text_surface = font_s.render(text, True, WHITE)
+                                    rect = text_surface.get_rect(center=text_pos)
+                                    screen.blit(text_surface, rect)
+                                screen.blit(header_text, header_rect)
+                                text_surface = font_s.render('sensitivity', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 150))
+                                screen.blit(text_surface, rect)
+                                pygame.display.flip()
+                            elif (text == 'decrease -'): # indicate correct button press
+                                sens -= 5
+                                screen.fill(BLACK) # Erase the work space
+                                text_surface = font_m.render(str(sens), True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 225))
+                                screen.blit(text_surface, rect)
+                                for text, text_pos in buttons_cali_s.items():
+                                    text_surface = font_s.render(text, True, WHITE)
+                                    rect = text_surface.get_rect(center=text_pos)
+                                    screen.blit(text_surface, rect)
+                                screen.blit(header_text, header_rect)
+                                text_surface = font_s.render('sensitivity', True, WHITE)
+                                rect = text_surface.get_rect(center=(200, 150))
+                                screen.blit(text_surface, rect)
+                                pygame.display.flip()
+                            elif (text == 'done'): # indicate correct button press
                                 cali_stage = 0
                                 break
         print('Calibrate Complete!')
+        dictionary = {
+            'color': color,
+            'sensitivity': sens
+        }
+
+        json_object = json.dumps(dictionary, indent = 4)
+
+        with open("cali.json", "w") as outfile:
+            outfile.write(json_object)
+        
+        os.system('bash ./send_cali.sh')
+
         ui_run = True
         calibrate = False

@@ -1,6 +1,10 @@
 #
 # W_yz2874_zg284 5/10/2023 Laptop Main Script
 #
+# Description:
+# This script is the main script for the laptop. It will display the UI and
+# send the commands to the Raspberry Pi.
+#
 
 import base64
 import cv2 as cv

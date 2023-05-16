@@ -1,5 +1,11 @@
 #
 # W_yz2874_zg284 5/9/2023 Raspberry Pi Main Script
+# Description:
+# This script is the main script for the raspberry pi. It will grab frames from the camera,
+# detect the pool table, and send the table to the queue. It will also receive the lines
+# from the queue and render them on the frame.
+# The script uses multiprocessing to accelerate the process.
+# The script also uses zmq to communicate with the laptop to send frames.
 #
 
 import argparse
